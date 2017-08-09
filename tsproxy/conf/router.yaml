@@ -1,0 +1,85 @@
+# D - direct connect
+# P - connect through proxy
+# F - forbidden access
+# jp.f ... - connect with the proxy of 'jp.f'
+# not conf - smart connect (cn_ip with D, else with P)
+
+#default: jp.f
+
+forbidden_domain:
+    host:
+        - help.apple.com
+        - monitor.uu.qq.com
+        - wup.browser.qq.com
+        - better-history.org
+        - officeapps.live.com
+
+forbidden_app:
+    app:
+        - Microsoft PowerPoint
+        - Microsoft Excel
+        - Microsoft Word
+        - Office365ServiceV2
+
+baiduYun:
+#    url: http://www.baidu.com/abc
+#    protocol: https
+    host: 
+        - pan.baidu.com
+        - baidupcs.com
+        - ourdvsss.com
+        - baijincdn.com
+        - jomodns.com
+#    port: 80
+#    path: /ass
+#    method: head
+    User-Agent: netdisk
+
+
+http_req:
+#    url: http://www.baidu.com/abc
+    protocol: http
+    host:
+        - "!facebook.com"
+        - "!google.com"
+        - "!tumblr.com"
+        - "!twitter.com"
+#    port:
+#        - 80
+#        - 443
+#    path: abc
+
+foreign_domain:
+    host:
+        - facebook.com
+        - google.com
+        - tumblr.com
+        - twitter.com
+
+cn_domain:
+    host:
+        - localhost
+        - .cn
+        - .baidu.com
+        - .jd.com
+        - .360buyimg.com
+        - .taobao.com
+        - .alicdn.com
+        - .tanx.com
+        - .bdimg.com
+        - .qq.com
+        - .alipay.com
+        - .apple.com
+        - .icloud.com
+        - data.flurry.com
+        - .zhimg.com
+        - youku.com
+
+router:
+    - forbidden_app: F
+    - forbidden_domain: F
+    - foreign_domain: P
+    - baiduYun: charles
+    - cn_domain: D
+#    - http_req: D
+
