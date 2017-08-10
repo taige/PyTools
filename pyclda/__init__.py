@@ -1178,8 +1178,8 @@ def args_parse(*args):
     headers = kwargs.pop('headers')
     if kwargs.pop('baidu'):
         headers.append('X-Download-From: baiduyun')
-        headers.append('Cookie: BDUSS=;STOKEN=')
-        kwargs['user_agent'] = 'netdisk;2.1.0;pc;pc-mac;10.12.5;macbaiduyunguanjia'
+        if kwargs['user_agent'] is None:
+            kwargs['user_agent'] = 'netdisk;2.1.0;pc;pc-mac;10.12.5;macbaiduyunguanjia'
     elif kwargs['user_agent'] is None:
         kwargs['user_agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36'
     if kwargs['post_data']:
