@@ -1054,7 +1054,7 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
     #     loop.close()
 
 
-def curses_entry(stdscr, log_cache, *headers, **kwargs):
+def curses_entry(stdscr, log_cache, verbose, *headers, **kwargs):
     global SCR_ROWS
     global SCR_COLS
 
@@ -1091,7 +1091,7 @@ def curses_entry(stdscr, log_cache, *headers, **kwargs):
             shift_log_cache(logging.INFO)
 
     logging.basicConfig(format='%(asctime)s - %(message)s',
-                        level=logging.NOTSET if _verbose > 2 else logging.DEBUG if _verbose > 1 else logging.INFO if _verbose > 0 else logging.WARNING,
+                        level=logging.NOTSET if verbose > 2 else logging.DEBUG if verbose > 1 else logging.INFO if verbose > 0 else logging.WARNING,
                         handlers=[PadHandler()])
 
     _pad_queue = asyncio.Queue()
@@ -1195,7 +1195,7 @@ def main():
     _kwargs['loop'] = _loop
     try:
         if _use_curses:
-            curses.wrapper(curses_entry, logs, *_headers, **_kwargs)
+            curses.wrapper(curses_entry, logs, _verbose, *_headers, **_kwargs)
         else:
             raise curses.error()
     except curses.error:
