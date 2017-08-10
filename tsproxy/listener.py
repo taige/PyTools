@@ -123,6 +123,7 @@ class HttpListener(Listener):
                             self._processes[c.pid] = proc
                         connection['process_pid'] = proc.pid
                         connection['process_name'] = proc.name()
+                        return
         except psutil.AccessDenied:
             self._root_access = False
         except BaseException as ex:
