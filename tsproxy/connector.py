@@ -283,12 +283,25 @@ class RouterableConnector(SmartConnector):
                     _conf = yaml.load(f)
                 _conf.setdefault('router', [])
                 if not self.check_yaml_conf(_conf):
-                    logger.warning('%s check FAIL!', self.yaml_conf_file)
+                    logger.warning('%s load FAIL!', self.yaml_conf_file)
                     return
                 self.yaml_conf = _conf
                 logger.info('%s reloaded', self.yaml_conf_file)
         except BaseException as e:
             self.conf_update_time = time.time() + 10 * 60
+
+    def port_value_is_int(self, value):
+        if isinstance(value, int):
+            return True
+        try:
+            if value[0] == '!':
+                int(value[1:])
+            else:
+                int(value)
+            return True
+        except:
+            logger.warning('port: %s is NOT a integer', value)
+            return False
 
     def check_yaml_conf(self, conf):
         ok = True
@@ -302,8 +315,18 @@ class RouterableConnector(SmartConnector):
             elif 'router' != k:
                 for con in v:
                     if con not in ('url', 'protocol', 'host', 'port', 'path', 'method', 'app'):
-                        logger.warning('headers condition: %s', con)
-                        # ok = False
+                        logger.info('headers condition: %s', con)
+                    elif con == 'port':
+                        con_values = v[con]
+                        if isinstance(con_values, int):
+                            continue
+                        elif isinstance(con_values, list):
+                            for _v in con_values:
+                                if not self.port_value_is_int(_v):
+                                    ok = False
+                        else:
+                            if not self.port_value_is_int(con_values):
+                                ok = False
         for _r in conf['router']:
             for _con in _r:
                 _to = _r[_con]
