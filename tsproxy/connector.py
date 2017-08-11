@@ -362,6 +362,7 @@ class RouterableConnector(SmartConnector):
         elif k == 'host':
             _m = request.url.hostname.lower().endswith(v.lower())
         elif k == 'port':
+            v = v if isinstance(v, int) else int(v)
             _m = request.url.port == v
         elif k == 'path':
             _m = request.url.path.lower().startswith(v.lower())
