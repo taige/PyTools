@@ -257,11 +257,13 @@ class RouterableConnector(SmartConnector):
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
         request = kwargs['request'] if 'request' in kwargs else None
         if proxy_name is None and request is not None:
-            proxy_name = self.get_proxy_name(request, peer)
+            if topendns.is_local(target_host):
+                return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
+            proxy_name, condition = self.get_proxy_name(request, peer)
             if proxy_name is not None:
                 if proxy_name == 'F':
                     yield from asyncio.sleep(5)
-                    raise ConnectionError('match forbidden access %s' % request.request_line)
+                    raise ConnectionError(errno.EACCES, 'match rule: %s' % condition)
                 elif proxy_name == 'P':
                     return (yield from self.proxy_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
                 elif proxy_name == 'D':
@@ -364,8 +366,8 @@ class RouterableConnector(SmartConnector):
                         break
                 if _con_match:
                     logger.debug('match router: %s', _con_name)
-                    return _to
-        return self.yaml_conf['default'] if 'default' in self.yaml_conf else None
+                    return _to, _con_name
+        return (self.yaml_conf['default'] if 'default' in self.yaml_conf else None), None
 
     def _match(self, k, v, request, connection):
         if v[0] == '!':

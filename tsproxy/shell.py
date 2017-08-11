@@ -155,7 +155,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
                     'SIGTERM' if signum == signal.SIGTERM else
                     'SIGINT' if signum == signal.SIGINT else '%d' % signum)
         try:
-            print_stack_trace()
+            # print_stack_trace()
             proxy_holder.shutdowning = True
         except BaseException as ex1:
             logger.exception('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)

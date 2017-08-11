@@ -78,6 +78,8 @@ local_ip_list = (
     ('172.31.0.0', 0xffff0000)
 )
 
+local_ip_mask_list = None
+
 _cn_domain_list = {
     'localhost',
     '.cn',
@@ -218,6 +220,23 @@ def is_ipv4(addr):
 
 def is_ipv6(addr):
     return ipv6_regex.match(addr)
+
+
+def is_local(addr):
+    global local_ip_mask_list
+    if not is_ipv4(addr):
+        return False
+    if local_ip_mask_list is None:
+        local_ip_mask_list = []
+        for local in local_ip_list:
+            starting_ip = int.from_bytes(socket.inet_aton(local[0]), byteorder='big')
+            imask = local[1]
+            local_ip_mask_list.append((starting_ip, imask))
+    ipn = int.from_bytes(socket.inet_pton(socket.AF_INET, addr), byteorder='big')
+    for ip, mask in local_ip_mask_list:
+        if ip == (ipn & mask):
+            return True
+    return False
 
 
 def del_cache(addr):
