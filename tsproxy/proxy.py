@@ -659,7 +659,8 @@ class Proxy(ProxyStat):
                     _mutable_data_count[4] = int(time.time())
                     _mutable_data_count[5] = connection['_realtime_speed_']
                     self.realtime_speed = _mutable_data_count[5]
-                    logger.debug('%s realtime_speed: %sB/S %sB/S %s %s', connection, common.fmt_human_bytes(connection['_realtime_speed_']), common.fmt_human_bytes(self.realtime_speed), common.fmt_human_bytes(_mutable_data_count[0]), common.fmt_human_bytes(_mutable_data_count[0]-_mutable_data_count[6]))
+                    logger.debug('%s realtime_speed: %sB/S %sB/S %s %s', connection, common.fmt_human_bytes(connection['_realtime_speed_']), common.fmt_human_bytes(self.realtime_speed),
+                                 common.fmt_human_bytes(_mutable_data_count[0]), common.fmt_human_bytes(_mutable_data_count[0]-_mutable_data_count[6]))
                 # else:
                 #     logger.debug('%s realtime_speed %d/%.1f: %sB/S', connection, _data_len, _mutable_data_count[3], common.fmt_human_bytes(connection['_realtime_speed_']))
         else:
@@ -683,7 +684,8 @@ class Proxy(ProxyStat):
                 # if self.down_speed == 0:
                 #     self.down_speed = self.realtime_speed
                 # self.down_speed = (self.down_speed + self.realtime_speed) / 2
-                logger.debug('%s realtime_speed2: %sB/S %sB/S %s %s', connection, common.fmt_human_bytes(connection['_realtime_speed_']), common.fmt_human_bytes(self.realtime_speed), common.fmt_human_bytes(_mutable_data_count[0]), common.fmt_human_bytes(_mutable_data_count[0]-_mutable_data_count[6]))
+                logger.debug('%s realtime_speed2: %sB/S %sB/S %s %s', connection, common.fmt_human_bytes(connection['_realtime_speed_']), common.fmt_human_bytes(self.realtime_speed),
+                             common.fmt_human_bytes(_mutable_data_count[0]), common.fmt_human_bytes(_mutable_data_count[0]-_mutable_data_count[6]))
         logger.info("forward-%s(%s) DONE", self.protocol, connection)
 
 

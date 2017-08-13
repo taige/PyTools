@@ -7,6 +7,7 @@ import logging
 import logging.config
 import os
 import signal
+from concurrent.futures import CancelledError
 
 import uvloop
 
@@ -14,6 +15,7 @@ from tsproxy.common import print_stack_trace, lookup_conf_file
 from tsproxy.connector import RouterableConnector, CheckConnector
 from tsproxy.listener import ManageableHttpListener, HttpListener
 from tsproxy.proxyholder import ProxyHolder
+from tsproxy import topendns
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ def args_parse(args=None):
     parser.add_argument('--http-port', '-p', dest='http_port', type=int, default=8080,
                         help="http(s) proxy listening port.\ndefault is 8080.")
     parser.add_argument('--http-address', dest='http_address', default='0.0.0.0',
-                        help="http(s) proxy listening address.\ndefault is '127.0.0.1'.")
+                        help="http(s) proxy listening address.\ndefault is '0.0.0.0'.")
     parser.add_argument('--socks5-port', metavar='SOCKS5_PORT', dest='socks5_port', type=int, default=7070,
                         help="socks5 proxy listening port.\ndefault is 7070")
     parser.add_argument('--pid-file', dest='pid_file', default='.ss-proxy.pid',
@@ -71,11 +73,11 @@ def args_parse(args=None):
     return kwargs, hostnames
 
 
-async def update_log_conf(logger_conf_file, update_interval=10):
+async def update_log_conf(logger_conf_file, update_interval=10, loop=None):
     global logger_conf_mod
     if logger_conf_mod > 0:
         while True:
-            await asyncio.sleep(update_interval)
+            await asyncio.sleep(update_interval, loop=loop)
             try:
                 mtime = os.stat(logger_conf_file).st_mtime
                 if mtime > logger_conf_mod:
@@ -86,8 +88,24 @@ async def update_log_conf(logger_conf_file, update_interval=10):
                 logging.exception('update_log_conf(%s) fail: %s', logger_conf_file, ex_log1)
 
 
+async def update_apnic(inital_wait, loop=None):
+    wait_to_next = inital_wait
+    while True:
+        await asyncio.sleep(wait_to_next)
+        try:
+            wait_to_next = await topendns.update_apnic_latest(loop=loop)
+        except CancelledError:
+            break
+        except BaseException as ex:
+            logging.exception('update_apnic fail: %s', ex)
+
+
+is_shutdown = False
+
+
 def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='proxies.json', pid_file='.ss-proxy.pid', smart_mode=1, **kwargs):
     global logger_conf_mod
+    _startup = False
 
     logger_conf_file = 'ss-proxy-logging.conf'
     if 'logger_conf' in kwargs and kwargs['logger_conf']:
@@ -121,12 +139,38 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
         proxy_info = proxy_holder.proxy_list[i]
         proxy_info.print_info(i)
 
+    apnic_update_task = loop.create_task(topendns.update_apnic_latest(raise_on_fail=True, loop=loop))
+
+    def term_handler(sig_num):
+        global is_shutdown
+        if sig_num == signal.SIGQUIT:
+            print_stack_trace()
+            return
+        logger.debug('received %s, do graceful closing ...',
+                     'SIGTERM' if sig_num == signal.SIGTERM else
+                     'SIGINT' if sig_num == signal.SIGINT else '%d' % sig_num)
+        try:
+            for t in asyncio.Task.all_tasks():
+                t.cancel()
+        except BaseException as ex1:
+            logger.exception('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
+        finally:
+            is_shutdown = True
+            if _startup:
+                loop.stop()
+
+    for signame in ('SIGINT', 'SIGTERM', 'SIGQUIT'):
+        signum = getattr(signal, signame)
+        loop.add_signal_handler(signum, term_handler, signum)
+
+    next_update_apnic = loop.run_until_complete(apnic_update_task)
+
     def dump_config():
         j_dump = {}
         http_proxy.dump_acl(j_dump)
         proxy_holder.dump_proxys(j_dump)
-        with open(proxy_file + '.ing', 'w') as f:
-            json.dump(j_dump, f, indent=2, sort_keys=True)
+        with open(proxy_file + '.ing', 'w') as pf:
+            json.dump(j_dump, pf, indent=2, sort_keys=True)
         os.rename(proxy_file + '.ing', proxy_file)
 
     http_proxy = ManageableHttpListener(listen_addr=(http_address, http_port),
@@ -147,38 +191,18 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
     with open(pid_file, 'w') as f:
         f.write('%d' % os.getpid())
 
-    def term_handler(signum):
-        if signum == signal.SIGQUIT:
-            print_stack_trace()
-            return
-        logger.info('received %s, do graceful closing ...',
-                    'SIGTERM' if signum == signal.SIGTERM else
-                    'SIGINT' if signum == signal.SIGINT else '%d' % signum)
-        try:
-            # print_stack_trace()
-            proxy_holder.shutdowning = True
-        except BaseException as ex1:
-            logger.exception('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
-        finally:
-            loop.stop()
-
-    for signame in ('SIGINT', 'SIGTERM', 'SIGQUIT'):
-        signum = getattr(signal, signame)
-        loop.add_signal_handler(signum, term_handler, signum)
-
     try:
-        conf_update_task = loop.create_task(update_log_conf(logger_conf_file))
-        monitor_task = loop.create_task(proxy_holder.monitor_loop())
+        if not is_shutdown:
+            loop.create_task(update_log_conf(logger_conf_file, loop=loop))
+            loop.create_task(update_apnic(next_update_apnic, loop=loop))
+            loop.create_task(proxy_holder.monitor_loop(loop=loop))
 
-        logger.info('TSProxy Startup')
-        loop.run_forever()
+            logger.info('TSProxy Startup')
+            _startup = True
+            loop.run_forever()
         server.close()
         # https_server.close()
         check_server.close()
-        conf_update_task.cancel()
-        monitor_task.cancel()
-        for t in asyncio.Task.all_tasks():
-            t.cancel()
         loop.run_until_complete(server.wait_closed())
         # loop.run_until_complete(https_server.wait_closed())
         loop.run_until_complete(check_server.wait_closed())

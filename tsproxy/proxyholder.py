@@ -28,25 +28,29 @@ TEST_URLS = [
 
 
 def sort_proxies(p):
-    # if 'sort_key_time' in p and 'sort_key' in p:
-    #     if time.time() - p['sort_key_time'] < 1:
-    #         return p['sort_key']
-    # global_tp90 = ProxyStat.calc_tp90()
-    # if global_tp90 == 0:
-    #     return 0
-    # if p.down_speed == 0:
-    #     p['sort_key'] = p.tp90
-    # else:
-    #     # f1 成功率^3
-    #     f1 = 1 - p.total_fail_rate
-    #     f1 *= f1 * f1
-    #     # f2 连接速度偏差 率
-    #     f2 = p.tp90 / global_tp90
-    #     f2 *= f2
-    #     f2 = 1 - f2
-    #     p['sort_key'] = -p.down_speed * f1 * f2
-    # p['sort_key_time'] = time.time()
     return 100 if p.pause else -p.sort_key
+
+
+def get_wan_ip():
+    from tsproxy.topendns import is_ipv4
+    try:
+        res = requests.get('http://members.3322.org/dyndns/getip', headers={
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) '
+                          'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Accept-Language': 'zh-CN,zh;q=0.8'
+        }, timeout=common.default_timeout)
+        if 200 <= res.status_code < 400:
+            wan_ip = res.text.rstrip()
+            if is_ipv4(wan_ip):
+                return wan_ip
+            else:
+                logger.warning('get_wan_ip() return not ipv4: %s', wan_ip)
+    except Exception as ex:
+        logger.warning('get_wan_ip() %s: %s', ex.__class__.__name__, ex)
+    return None
 
 
 class ProxyHolder(object):
@@ -142,7 +146,7 @@ class ProxyHolder(object):
         for p in proxy_infos:
             self.add_proxy(p, insert=insert)
         # ProxyStat.global_proxy_count = FIFOList(common.tp90_expired_time, common.tp90_calc_count*self._proxy_count, lambda k: k[0])
-        ProxyStat.global_resp_time = FIFOList(common.tp90_expired_time, common.tp90_calc_count*self._proxy_count)  # , lambda k: k[0])
+        ProxyStat.global_resp_time = common.FIFOList(common.tp90_expired_time, common.tp90_calc_count*self._proxy_count)  # , lambda k: k[0])
 
     def add_proxy(self, proxy_info, insert=False):
         p1 = proxy_info.find('/')
@@ -319,7 +323,7 @@ class ProxyHolder(object):
                         # speed value life time: 3 hours
                         # OR local/wan access changed
                         logger.info("LOCAL IP: %s", local_ip)
-                        wan_ip = yield from self._loop.run_in_executor(self.executor, common.get_wan_ip)
+                        wan_ip = yield from self._loop.run_in_executor(self.executor, get_wan_ip)
                         if wan_ip is not None:
                             self.local_ip = local_ip
                         if (time.time() - self.last_speed_test_time) > common.tp90_expired_time or self.wan_ip is None or (wan_ip is not None and self.wan_ip != wan_ip):
@@ -332,7 +336,7 @@ class ProxyHolder(object):
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
-    def _speed_test(self, proxy, url, speed_threshold=0, timeout=3, bytes=None):
+    def _speed_test(self, proxy, url, speed_threshold=0, timeout=3, bytes_range=None):
         res = None
         MAX_BUF_SIZE_KB = 200
         self.testing_proxy = proxy.short_hostname
@@ -348,8 +352,8 @@ class ProxyHolder(object):
                 'Accept-Language': 'zh-CN,zh;q=0.8'
                 # 'Proxy-Name': '%s' % proxy.short_hostname
             }
-            if bytes:
-                headers['Range'] = 'bytes=0-%d' % bytes
+            if bytes_range:
+                headers['Range'] = 'bytes=0-%d' % bytes_range
             res = requests.get(url, headers=headers, timeout=timeout, proxies={
                 "http": "http://127.0.0.1:%d" % self._proxy_port,
                 "https": "http://127.0.0.1:%d" % self._proxy_port
@@ -394,7 +398,7 @@ class ProxyHolder(object):
                 res.close()
         return proxy.down_speed
 
-    def test_proxies_speed(self, hosts=None, re_test=2, bytes=2133961,
+    def test_proxies_speed(self, hosts=None, re_test=2, bytes_range=2133961,
                            url='https://vt.media.tumblr.com/tumblr_olmzaj26fj1qlmvfe_480.mp4'):
         # with self.rlock:
         if self.speed_testing:
@@ -406,7 +410,7 @@ class ProxyHolder(object):
                 _hosts = hosts
             max_speed = 0
             if not _hosts or self.proxy_list[0].short_hostname in _hosts:
-                max_speed = self._speed_test(self.proxy_list[0], url, bytes=bytes)
+                max_speed = self._speed_test(self.proxy_list[0], url, bytes_range=bytes_range)
             # for proxy in sorted(self.proxy_list[1:], key=lambda p: p.tp90):
             for proxy in self.proxy_list[1:]:
                 # err_c = proxy.error_count + 1
@@ -418,7 +422,7 @@ class ProxyHolder(object):
                 if proxy.pause:  # or 0 == proxy.tp90 or proxy.tp90 > ProxyStat.calc_tp90()*1.2:
                     logger.debug("test_proxies_speed %s skip for tp90 %.1f or pause=%s", proxy.short_hostname, proxy.tp90, proxy.pause)
                     continue
-                _speed = self._speed_test(proxy, url, speed_threshold=0 if _hosts else max_speed*0.5, bytes=bytes)
+                _speed = self._speed_test(proxy, url, speed_threshold=0 if _hosts else max_speed*0.5, bytes_range=bytes_range)
                 if _speed > max_speed:
                     max_speed = _speed
 
@@ -491,7 +495,7 @@ class ProxyHolder(object):
                 used = time.time() - start
                 logger.info('connect to proxy %s/%s:%d used %.2f sec', hostname, ip, port, used)
             except (ConnectionError, socket.timeout) as conn_err:
-                logger.warn('try to connect to proxy %s/%s:%d fail: %s', hostname, ip, port, conn_err)
+                logger.warning('try to connect to proxy %s/%s:%d fail: %s', hostname, ip, port, conn_err)
             finally:
                 sock.close()
             proxy.connected_used = used
@@ -513,7 +517,7 @@ class ProxyHolder(object):
             return
         self.proxy_check_queue.put_nowait((proxy, reason))
 
-    def monitor_loop(self):
+    def monitor_loop(self, loop=None):
         check_interval = common.default_timeout
         while not self.shutdowning:
             timeout = False
@@ -522,7 +526,7 @@ class ProxyHolder(object):
                 with common.Timeout(check_interval):
                     p, checking_reason = yield from self.proxy_check_queue.get()
                     checking_proxy.add(p)
-                yield from asyncio.sleep(1)
+                yield from asyncio.sleep(1, loop=loop)
                 while not self.proxy_check_queue.empty():
                     p, r = self.proxy_check_queue.get_nowait()
                     checking_proxy.add(p)

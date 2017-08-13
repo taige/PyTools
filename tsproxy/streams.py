@@ -17,7 +17,7 @@ async def start_listener(handler, host=None, port=None, *, loop=None, encoder=No
         _protocol = StreamProtocol(handler, loop=loop, encoder=encoder, decoder=decoder, acl_ips=acl_ips, **kwargs)
         return _protocol
 
-    return await loop.create_server(factory, host, port, backlog=1024, ssl=ssl, **kwargs)
+    return await loop.create_server(factory, host, port, backlog=1024, ssl=ssl)
 
 
 def start_connection(handler, host=None, port=None, *, loop=None, encoder=None, decoder=None, connect_timeout=common.default_timeout, local_dns=False, **kwargs):
@@ -112,8 +112,8 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                 def wrapper():
                     try:
                         yield from res
-                    except BaseException as ex1:
-                        logger.exception("handle connect %s %s: %s", self._connection, ex1.__class__.__name__, ex1)
+                    except BaseException as ex:
+                        logger.exception("handle connect %s %s: %s", self._connection, ex1.__class__.__name__, ex)
                     finally:
                         try:
                             if self._connection.reader.exception() is None and not self._connection_lost \

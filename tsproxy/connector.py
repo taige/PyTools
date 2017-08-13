@@ -157,7 +157,7 @@ class ProxyConnector(Connector):
                 err_no = common.errno_from_exception(ex1)
                 if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH):
                     if proxy_name is not None \
-                            or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', ex1.__class__.__name__, ex1) :
+                            or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', ex1.__class__.__name__, ex1):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
                         proxy.update_stat_info(used, proxy_fail=True, proxy_name=proxy_name)

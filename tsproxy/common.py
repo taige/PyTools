@@ -11,7 +11,6 @@ import time
 import traceback
 from io import StringIO
 
-import requests
 from async_timeout import timeout
 
 from tsproxy import *
@@ -162,28 +161,6 @@ def hostname2short(hostname):
             return hostname[:idx1]
     else:
         return hostname
-
-
-def get_wan_ip():
-    from tsproxy.topendns import is_ipv4
-    try:
-        res = requests.get('http://members.3322.org/dyndns/getip', headers={
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'Accept-Language': 'zh-CN,zh;q=0.8'
-        }, timeout=default_timeout)
-        if 200 <= res.status_code < 400:
-            wan_ip = res.text.rstrip()
-            if is_ipv4(wan_ip):
-                return wan_ip
-            else:
-                logger.warning('get_wan_ip() return not ipv4: %s', wan_ip)
-    except Exception as ex:
-        logger.warning('get_wan_ip() %s: %s', ex.__class__.__name__, ex)
-    return None
 
 
 class FIFOList(list):

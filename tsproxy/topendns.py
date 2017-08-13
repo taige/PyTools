@@ -14,7 +14,13 @@ from tsproxy.common import FIFOCache, MyThreadPoolExecutor, lookup_conf_file
 logger = logging.getLogger(__name__)
 
 cn_ip_list = []
-cn_ip_last_mod = 0
+cn_ip_file_mod = 0
+cn_ip_update = 0
+
+apnic_file = None
+
+APNIC_LATEST = 'apnic-latest'
+APNIC_LATEST_URL = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
 
 local_dns_query = False
 
@@ -118,6 +124,28 @@ if 'WINDIR' in os.environ:
 # rlock = threading.RLock()
 
 dns_executor = MyThreadPoolExecutor(max_workers=os.cpu_count()+1, pool_name='DnsWorker', order_by_func=True)
+
+
+async def update_apnic_latest(raise_on_fail=False, loop=None):
+    import pyclda
+    global apnic_file
+    if apnic_file is None:
+        apnic_file = lookup_conf_file(APNIC_LATEST)
+    if apnic_file == APNIC_LATEST or (time.time() - os.stat(apnic_file).st_mtime) >= 24*30*3600:
+        # not found
+        done, out_file = await pyclda.aio_download(session=None, url=APNIC_LATEST_URL, out_file=APNIC_LATEST+'.downloading', method='GET', loop=loop)
+        if done:
+            os.rename(out_file, APNIC_LATEST)
+            apnic_file = lookup_conf_file(APNIC_LATEST)
+            load_cn_list()
+            return 24*30*3600
+        elif apnic_file == APNIC_LATEST and raise_on_fail:
+            raise Exception('download %s fail, pls check the log' % APNIC_LATEST)
+        else:
+            return 60
+    else:
+        load_cn_list()
+        return os.stat(apnic_file).st_mtime + 24*30*3600 - time.time()
 
 
 def update_hosts():
@@ -335,9 +363,11 @@ def is_cn_ip(atype, addr, return_country=False):
     if ip is None:
         return False if not return_country else 'FOREIGN'
     if ip == '202.106.1.2' or ip == '211.94.66.147' or ip == '180.168.41.175':
-        logger.warn('GFW IP: %s[%s]', ip, addr)
+        logger.warning('GFW IP: %s[%s]', ip, addr)
         cn_addr_cache[addr] = 'FOREIGN'
         return False if not return_country else 'FOREIGN'
+    if is_local(ip):
+        return True if not return_country else 'CN'
     ipn = int.from_bytes(socket.inet_pton(socket.AF_INET6 if atype == 0x04 else socket.AF_INET, ip), byteorder='big')
     for ip, mask, country in cn_ip_list:
         if ip == (ipn & mask):
@@ -357,22 +387,24 @@ def is_cn_ip(atype, addr, return_country=False):
 def load_cn_list(only_cn=True):
     """http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest"""
 
-    global cn_ip_last_mod
+    global cn_ip_file_mod
     global cn_ip_list
+    global cn_ip_update
+    global apnic_file
 
-    if cn_ip_last_mod > 0:
+    if apnic_file is None:
+        apnic_file = lookup_conf_file(APNIC_LATEST)
+
+    if (time.time() - cn_ip_update) < 60:
         return
+    cn_ip_update = time.time()
 
     try:
-        cn_ip_list.clear()
+        mtime = os.stat(apnic_file).st_mtime
+        if mtime <= cn_ip_file_mod:
+            return
 
-        for local in local_ip_list:
-            starting_ip = int.from_bytes(socket.inet_aton(local[0]), byteorder='big')
-            imask = local[1]
-            cn_ip_list.append((starting_ip, imask, 'CN'))
-
-        cn_ip_last_mod = os.stat('apnic-latest').st_mtime
-        with open('apnic-latest', 'r') as f:
+        with open(apnic_file, 'r') as f:
             data = f.read()
 
         if only_cn:
@@ -381,6 +413,7 @@ def load_cn_list(only_cn=True):
             regex = re.compile(r'apnic\|..\|ipv[46]\|[0-9a-f\.:]+\|[0-9]+\|[0-9]+\|a.*', re.IGNORECASE)
         cndata = regex.findall(data)
 
+        cn_ip_list.clear()
         for item in cndata:
             unit_items = item.split('|')
             country = unit_items[1]
@@ -393,10 +426,12 @@ def load_cn_list(only_cn=True):
                 imask = 0xffffffff ^ (num_ip-1)
             cn_ip_list.append((starting_ip, imask, country))
 
-        logger.info('apnic-latest loaded')
+        cn_ip_file_mod = mtime
+        logger.info('%s loaded', apnic_file)
     except FileNotFoundError:
-        cn_ip_last_mod = time.time() + 60
-        logger.debug('file not found: apnic-latest')
+        cn_ip_update = time.time() + 60
+        logger.warning('file not found: %s', apnic_file)
+        apnic_file = lookup_conf_file(APNIC_LATEST)
     except BaseException as ex_apnic:
         logging.exception('load_cn_list(only_cn=%s) fail: %s', only_cn, ex_apnic)
 
@@ -404,7 +439,7 @@ def load_cn_list(only_cn=True):
 if __name__ == '__main__':
     import signal
     import sys
-    from tsproxy import print_stack_trace
+    from tsproxy.common import print_stack_trace
 
     def term_handler(signum, _):
         if signum == signal.SIGQUIT:
@@ -418,7 +453,7 @@ if __name__ == '__main__':
         except FileNotFoundError:
             pass
         except BaseException as ex1:
-            logger.warn('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
+            logger.warning('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
         finally:
             sys.exit(0)
 
@@ -426,4 +461,4 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, print_stack_trace)
     signal.signal(signal.SIGQUIT, print_stack_trace)
 
-    ipv4 = dns_query('jp01.sss.tf')
+    _ipv4 = dns_query('jp01.sss.tf')

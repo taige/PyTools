@@ -12,7 +12,6 @@ import psutil
 
 import tsproxy.proxy
 from tsproxy import httphelper2 as httphelper
-from tsproxy.common import print_stack_trace
 from tsproxy import common, proxy, streams, topendns
 
 
@@ -41,7 +40,9 @@ class Listener:
         self.kwargs = kwargs
 
     async def start(self):
-        return await streams.start_listener(self, host=self.listen_address[0], port=self.listen_address[1], loop=self.loop, acl_ips=self._acl, **self.kwargs)
+        _server = await streams.start_listener(self, host=self.listen_address[0], port=self.listen_address[1], loop=self.loop, acl_ips=self._acl, **self.kwargs)
+        logger.info('%s://%s listen at %s:%d', self.name, self.__class__.__name__, self.listen_address[0], self.listen_address[1])
+        return _server
 
     def load_acl(self, j):
         if 'acl' in j:
@@ -468,8 +469,8 @@ class ManageableHttpListener(HttpListener):
                                                    tsproxy.proxy.ProxyStat.global_tp90_len,
                                                    tsproxy.proxy.ProxyStat.global_resp_count))
         for i in range(0, self.proxy_holder.psize):
-            proxy = self.proxy_holder.proxy_list[i]
-            proxy.print_info(i, out=out)
+            _proxy = self.proxy_holder.proxy_list[i]
+            _proxy.print_info(i, out=out)
 
     def do_head(self, out, host):
         p, _ = self.proxy_holder.find_proxy(host)
@@ -509,7 +510,7 @@ class ManageableHttpListener(HttpListener):
                 logger.info('Error: move head to tail FAIL')
 
     def do_stack(self, out):
-        print_stack_trace(limit=None, out=out)
+        common.print_stack_trace(limit=None, out=out)
 
 
 class HttpRequestDecoder(streams.Decoder):

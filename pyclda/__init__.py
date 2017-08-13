@@ -18,8 +18,7 @@ import uvloop
 from aiohttp import client_exceptions as errors
 from aiohttp import formdata, hdrs
 
-from tsproxy.common import MyThreadPoolExecutor
-from tsproxy.common import Timeout
+from tsproxy.common import MyThreadPoolExecutor, Timeout
 
 logger = logging.getLogger(__name__)
 
@@ -726,7 +725,107 @@ def do_log(status, index, _log, _s_time, _s_pos, _s_p, _log_time):
     return _s_time, _s_pos, _s_p, _log_time
 
 
+def get_filenames(url, out_file):
+    if out_file is None:
+        o_url = urlparse(url)
+        out_file = os.path.basename(o_url.path)
+    else:
+        out_file = out_file.strip()
+
+    _out_file = out_file
+    for i in range(0, 200):
+        status_file = '%s.axel.st' % out_file
+        if not os.path.isfile(out_file):
+            with open(out_file, 'wb'):
+                pass
+            break
+        elif not os.path.isfile(status_file):
+            out_file = '%s.%d' % (_out_file, i)
+        elif i >= 100:
+            raise Exception('too many same filename[%s] files' % _out_file)
+        else:
+            break
+    return out_file, status_file
+
+
+async def await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop=None):
+    if len(futures) > 0:
+        while True:
+            try:
+                _done, _pending = await asyncio.wait(futures, loop=loop)
+                if len(_pending) > 0:
+                    done = False
+                    break
+                for f in _done:
+                    _d, _ = f.result()
+                    if not _d:
+                        done = False
+                        break
+                break
+            except CancelledError:
+                continue
+    if not done or (status['con_len'] is not None and status['con_len'] != status['con_down']):
+        done = False
+        logger.warning('=======')
+        logger.warning('%s %s FAIL', method, url)
+        for k in sorted(status, key=lambda sk: 'z' + str(sk) if isinstance(sk, int) else sk):
+            if isinstance(k, str) and not k.startswith('_'):
+                logger.warning('%-10s: %s', k, status[k])
+        status.log(inactive=False)
+    else:
+        if os.path.isfile(_status_file):
+            os.remove(_status_file)
+        speed = (status['con_down'] - status['start_down']) / (time.time() - start)
+        logger.warning('==========================')
+        logger.warning('%s %s DONE used [%s], speed [%sB/S]', method, url, fmt_human_time(time.time() - start), fmt_human_bytes(speed))
+        filename = status['filename']
+        if filename is not None and out_file is None and filename != _out_file and not os.path.exists(filename):
+            os.rename(_out_file, filename)
+            logger.warning('save to %s', filename)
+            _out_file = filename
+        elif out_file is None or _out_file != out_file:
+            logger.warning('save to %s', _out_file)
+        if status['con_md5'] is not None:
+            logger.warning('server md5: %s, calculating local file md5...', status['con_md5'])
+            _md5 = MD5(_out_file)
+            if _md5.lower() != status['con_md5'].lower():
+                logger.warning('local file md5: %s', _md5)
+            else:
+                logger.warning('congratulations! md5 is same!')
+        logger.warning('==========================')
+    return done
+
+
+def load_last_status(status_fd, status, n, _out_file, url):
+    last_n = load_status(status_fd, status)
+    if n <= 0:
+        n = last_n
+    elif n > last_n:
+        # 增加下载连接数
+        last_n = extend_status(status_fd, status, last_n, new_n=n)
+        logger.warning('extend download tasks to %d', last_n)
+        n = last_n
+    elif n < last_n:
+        # 减少下载连接数
+        for i in range(n, last_n):
+            if status[i].pos > status[i].end:
+                del status[i]
+            else:
+                status[i].active = False
+        logger.warning('reduce download tasks from %d to %d', last_n, n)
+    status.log()
+    if SCR_COLS is not None:
+        win = IndicatorWindow(status, out_file=_out_file, url=url)
+        win.refresh_status()
+    return n
+
+
 async def aio_download(session, url, out_file, method, n=0, index=0, read_timeout=58, conn_timeout=5, status=None, loop=None, **kwargs):
+    if session is None:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True), conn_timeout=conn_timeout, loop=loop) as session:
+            return await aio_download(session, url, out_file, method, n=n, index=index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
+
+    start = time.time()
     if 'headers' in kwargs:
         headers = kwargs['headers']
     else:
@@ -743,6 +842,9 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
 
     if index == 0:
         logger.warning('%sing %s', method, url)
+        _out_file, _status_file = get_filenames(url, out_file)
+    else:
+        _out_file, _status_file = out_file, '%s.axel.st' % out_file
 
     def __log(level, msg, *log_args, exc_info=False, **log_kwargs):
         if not logger.isEnabledFor(level):
@@ -754,33 +856,13 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
 
     _log = __log
 
-    status_file = '%s.axel.st' % out_file
     status.active_n += 1
     try:
-        fd = open(out_file, 'r+b')
-        if os.path.isfile(status_file):
-            status_fd = open(status_file, 'r+b')
+        fd = open(_out_file, 'r+b')
+        if os.path.isfile(_status_file):
+            status_fd = open(_status_file, 'r+b')
             if index == 0:
-                last_n = load_status(status_fd, status)
-                if n <= 0:
-                    n = last_n
-                elif n > last_n:
-                    # 增加下载连接数
-                    last_n = extend_status(status_fd, status, last_n, new_n=n)
-                    logger.warning('extend download tasks to %d', last_n)
-                    n = last_n
-                elif n < last_n:
-                    # 减少下载连接数
-                    for i in range(n, last_n):
-                        if status[i].pos > status[i].end:
-                            del status[i]
-                        else:
-                            status[i].active = False
-                    logger.warning('reduce download tasks from %d to %d', last_n, n)
-                status.log()
-                if SCR_COLS is not None:
-                    win = IndicatorWindow(status, out_file=out_file, url=url)
-                    win.refresh_status()
+                n = load_last_status(status_fd, status, n, _out_file, url)
         else:
             status[index] = Progress([0, 0, None])
         if n <= 0:
@@ -853,14 +935,14 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
                 if index == 0 and len(futures) == 0:
 
                     async def _aio_download_task(_n, _index):
-                        return await aio_download(session, url, out_file, method, n=_n, index=_index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
+                        return await aio_download(session, url, _out_file, method, n=_n, index=_index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
 
                     _status_fd = status_fd
-                    status_fd = init_download_task(futures, status_fd, status, con_len, n, status_file, loop, _aio_download_task)
+                    status_fd = init_download_task(futures, status_fd, status, con_len, n, _status_file, loop, _aio_download_task)
                     n = len(futures) + 1
 
                     if _status_fd is None and status_fd is not None and SCR_COLS is not None:
-                        win = IndicatorWindow(status, out_file=out_file, url=url)
+                        win = IndicatorWindow(status, out_file=_out_file, url=url)
                         win.refresh_status()
 
                 await save_to_file(resp, status_fd, status, index, fd, read_timeout, _s_time, _log, loop)
@@ -898,12 +980,9 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
         _log(logging.INFO, 'NOT DONE: %s', status[index] if index in status else '')
     else:
         del status[index]
-    if len(futures) > 0:
-        try:
-            await asyncio.wait(futures, loop=loop)
-        except CancelledError:
-            pass
-    return done, status, futures
+    if index == 0:
+        done = await await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop)
+    return done, _out_file
 
 
 def MD5(filename, block_size=10240):
@@ -937,27 +1016,6 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    __out_file = out_file
-    if out_file is None:
-        o_url = urlparse(url)
-        out_file = os.path.basename(o_url.path)
-    else:
-        out_file = out_file.strip()
-
-    _out_file = out_file
-    for i in range(0, 200):
-        status_file = '%s.axel.st' % out_file
-        if not os.path.isfile(out_file):
-            with open(out_file, 'wb'):
-                pass
-            break
-        elif not os.path.isfile(status_file):
-            out_file = '%s.%d' % (_out_file, i)
-        elif i >= 100:
-            return
-        else:
-            break
-
     async def _d(post_data=None, **kw_args):
         data = None
         if post_data is not None:
@@ -966,21 +1024,20 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
                 _kv = _data.split('=', 1)
                 if len(_kv) == 2:
                     data.add_field(_kv[0], _kv[1])
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True), conn_timeout=conn_timeout, loop=loop) as session:
-            return await aio_download(
-                session,
-                url,
-                out_file,
-                method=method,
-                n=n,
-                loop=loop,
-                headers=dict_headers,
-                read_timeout=read_timeout,
-                conn_timeout=conn_timeout,
-                data=data,
-                proxy=http_proxy,
-                **kw_args
-            )
+        return await aio_download(
+            session=None,
+            url=url,
+            out_file=out_file,
+            method=method,
+            n=n,
+            read_timeout=read_timeout,
+            conn_timeout=conn_timeout,
+            loop=loop,
+            headers=dict_headers,
+            data=data,
+            proxy=http_proxy,
+            **kw_args
+        )
 
     def term_handler(_signum):
         if _signum == signal.SIGQUIT:
@@ -999,53 +1056,7 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
         loop.add_signal_handler(signum, term_handler, signum)
 
     try:
-        start = time.time()
-
-        done, status, futures = loop.run_until_complete(_d(**kwargs))
-
-        async def _w():
-            if len(futures) > 0:
-                return await asyncio.wait(futures, loop=loop)
-            else:
-                return [], []
-
-        _done, _pending = loop.run_until_complete(_w())
-        for f in _done:
-            _d, _, _ = f.result()
-            if not _d:
-                done = False
-                break
-        if len(_pending) > 0:
-            done = False
-
-        if not done or (status['con_len'] is not None and status['con_len'] != status['con_down']):
-            logger.warning('=======')
-            logger.warning('%s %s FAIL', method, url)
-            for k in sorted(status, key=lambda sk: 'z'+str(sk) if isinstance(sk, int) else sk):
-                if isinstance(k, str) and not k.startswith('_'):
-                    logger.warning('%-10s: %s', k, status[k])
-            status.log(inactive=False)
-        else:
-            if os.path.isfile(status_file):
-                os.remove(status_file)
-            speed = (status['con_down'] - status['start_down']) / (time.time() - start)
-            logger.warning('==========================')
-            logger.warning('%s %s DONE used [%s], speed [%sB/S]', method, url, fmt_human_time(time.time() - start), fmt_human_bytes(speed))
-            filename = status['filename']
-            if filename is not None and __out_file is None and filename != out_file and not os.path.exists(filename):
-                os.rename(out_file, filename)
-                logger.warning('save to %s', filename)
-                out_file = filename
-            elif __out_file is None:
-                logger.warning('save to %s', out_file)
-            if status['con_md5'] is not None:
-                logger.warning('server md5: %s, calculating local file md5...', status['con_md5'])
-                _md5 = MD5(out_file)
-                if _md5.lower() != status['con_md5'].lower():
-                    logger.warning('local file md5: %s', _md5)
-                else:
-                    logger.warning('congratulations! md5 is same!')
-            logger.warning('==========================')
+        loop.run_until_complete(_d(**kwargs))
     except CancelledError:
         pass
     except BaseException as ex:
