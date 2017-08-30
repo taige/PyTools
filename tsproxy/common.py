@@ -151,6 +151,24 @@ def fmt_human_bytes(num):
         return '%.1fK' % k
 
 
+def fmt_human_time(t, unit='s'):
+    if t is None:
+        return 'unknown'
+    if unit == 's':
+        if t < 60:
+            return '%02.1f' % t
+        m = t / 60
+        t %= 60
+    else:
+        m = t
+        t = 0
+    if m < 60:
+        return '%02d:%02d' % (m, t)
+    h = m / 60
+    m %= 60
+    return '%02d:%02d:%02d' % (h, m, t)
+
+
 def hostname2short(hostname):
     idx1 = hostname.rfind('.')
     if idx1 > 0:

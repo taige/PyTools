@@ -111,7 +111,7 @@ _hosts = {}
 cn_domain_list = set()
 foreign_domain_list = set()
 
-cn_domain_file = lookup_conf_file('cn_domain.conf')
+cn_domain_file = None
 cn_domain_update = 0
 cn_domain_file_mod = 0
 
@@ -196,6 +196,8 @@ def update_cn_domain():
     if (time.time() - cn_domain_update) < 1:
         return
     cn_domain_update = time.time()
+    if cn_domain_file is None:
+        cn_domain_file = lookup_conf_file('cn_domain.conf')
     try:
         mtime = os.stat(cn_domain_file).st_mtime
         if cn_domain_file_mod < mtime:

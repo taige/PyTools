@@ -19,6 +19,10 @@ from aiohttp import client_exceptions as errors
 from aiohttp import formdata, hdrs
 
 from tsproxy.common import MyThreadPoolExecutor, Timeout
+from tsproxy.common import fmt_human_bytes as _fmt_human_bytes
+from tsproxy.common import fmt_human_time as _fmt_human_time
+
+__all__ = ['aio_download']
 
 logger = logging.getLogger(__name__)
 
@@ -416,16 +420,6 @@ def fmt_human_bytes(num, status=None, key=None):
     return ('%'+str(status[key])+'s') % s
 
 
-def _fmt_human_bytes(num):
-    if num < 10000:
-        return '%d' % num
-    k = num / 1024
-    if k > 1024:
-        return '%.2fM' % (k/1024)
-    else:
-        return '%.1fK' % k
-
-
 def fmt_human_time(t, status=None, key=None):
     s = _fmt_human_time(t)
     if status is None:
@@ -433,20 +427,6 @@ def fmt_human_time(t, status=None, key=None):
     if key not in status or status[key] < len(s):
         status[key] = len(s)
     return ('%'+str(status[key])+'s') % s
-
-
-def _fmt_human_time(t):
-    if t is None:
-        return 'unknown'
-    if t < 60:
-        return '%02.1f' % t
-    m = t / 60
-    t %= 60
-    if m < 60:
-        return '%02d:%02d' % (m, t)
-    h = m / 60
-    m %= 60
-    return '%02d:%02d:%02d' % (h, m, t)
 
 
 def load_status(status_fd, status):

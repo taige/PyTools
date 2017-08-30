@@ -129,7 +129,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                      ', used %.3f sec' % (time.time()-self._create_time) if self._create_time is not None else '')
 
     def connection_lost(self, exc):
-        if self._connection:
+        if self._connection is not None:
             StreamProtocol._connection_counter -= 1
             logger.debug('connection_lost#%d: %s lived %.2f seconds', StreamProtocol._connection_counter, self._connection, self._connection.life_time)
         super().connection_lost(exc)
