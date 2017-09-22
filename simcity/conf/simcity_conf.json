@@ -1,0 +1,1099 @@
+{
+  "fast_mode": "package",
+  "listen_port": 5130,
+  "one_minute": 60,
+  "factories": {
+    "slot": 21
+  },
+  "shops": {
+    "建材店": {
+      "en_name": "jcd",
+      "slot": 4,
+      "seq": 1,
+      "stars": 1
+    },
+    "五金店": {
+      "en_name": "wjd",
+      "slot": 4,
+      "seq": 2,
+      "stars": 1
+    },
+    "农贸市场": {
+      "en_name": "nmsc",
+      "slot": 4,
+      "seq": 3,
+      "stars": 1
+    },
+    "家具店": {
+      "en_name": "jjd",
+      "slot": 3,
+      "seq": 4,
+      "stars": 1
+    },
+    "园艺店": {
+      "en_name": "yyd",
+      "slot": 3,
+      "seq": 5,
+      "stars": 0
+    },
+    "甜品店": {
+      "en_name": "tpd",
+      "slot": 4,
+      "seq": 6,
+      "stars": 0
+    },
+    "时装店": {
+      "en_name": "szd",
+      "slot": 3,
+      "seq": 7,
+      "stars": 0
+    },
+    "快餐店": {
+      "en_name": "kcd",
+      "slot": 2,
+      "seq": 8,
+      "stars": 0
+    },
+    "家电店": {
+      "en_name": "jdd",
+      "slot": 2,
+      "seq": 9,
+      "stars": 0
+    }
+  },
+  "materials": [
+    {
+      "class": "jins",
+      "cn_name": "金属",
+      "factory": true,
+      "seq": "Metal",
+      "time_consuming": 1
+    },
+    {
+      "class": "muc",
+      "cn_name": "木材",
+      "factory": true,
+      "seq": "Wood",
+      "time_consuming": 3
+    },
+    {
+      "class": "sul",
+      "cn_name": "塑料",
+      "factory": true,
+      "seq": "Plastic",
+      "time_consuming": 9
+    },
+    {
+      "class": "zhz",
+      "cn_name": "种子",
+      "factory": true,
+      "seq": "Seeds",
+      "time_consuming": 20
+    },
+    {
+      "class": "ks",
+      "cn_name": "矿石",
+      "factory": true,
+      "seq": "Minerals",
+      "time_consuming": 30
+    },
+    {
+      "class": "huax",
+      "cn_name": "化学",
+      "factory": true,
+      "seq": "Chemicals",
+      "time_consuming": 120
+    },
+    {
+      "class": "bul",
+      "cn_name": "布料",
+      "factory": true,
+      "seq": "Textiles",
+      "time_consuming": 180
+    },
+    {
+      "class": "t",
+      "cn_name": "糖",
+      "factory": true,
+      "seq": "Sugar and Spices",
+      "time_consuming": 240
+    },
+    {
+      "class": "bol",
+      "cn_name": "玻璃",
+      "factory": true,
+      "seq": "Glass",
+      "time_consuming": 300
+    },
+    {
+      "class": "sil",
+      "cn_name": "饲料",
+      "factory": true,
+      "seq": "Animal Feed",
+      "time_consuming": 360
+    },
+    {
+      "class": "xp",
+      "cn_name": "芯片",
+      "factory": true,
+      "seq": "Electrical Components",
+      "time_consuming": 420
+    },
+    {
+      "class": "dz",
+      "cn_name": "钉子",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "金属"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Nails",
+      "time_consuming": 5
+    },
+    {
+      "class": "mub",
+      "cn_name": "木板",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "木材"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Planks",
+      "time_consuming": 30
+    },
+    {
+      "class": "zhk",
+      "cn_name": "砖块",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "矿石"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Bricks",
+      "time_consuming": 20
+    },
+    {
+      "class": "shn",
+      "cn_name": "水泥",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "矿石"
+        },
+        {
+          "count": 1,
+          "raw_class": "化学"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Cement",
+      "time_consuming": 50
+    },
+    {
+      "class": "js",
+      "cn_name": "胶水",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 2,
+          "raw_class": "化学"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Glue",
+      "time_consuming": 60
+    },
+    {
+      "class": "yq",
+      "cn_name": "油漆",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "矿石"
+        },
+        {
+          "count": 2,
+          "raw_class": "化学"
+        }
+      ],
+      "shop": "建材店",
+      "seq": "Paint",
+      "time_consuming": 60
+    },
+    {
+      "class": "chuiz",
+      "cn_name": "锤子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "木材"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Hammer",
+      "time_consuming": 14
+    },
+    {
+      "class": "chiz",
+      "cn_name": "尺子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "塑料"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Measuring Tape",
+      "time_consuming": 20
+    },
+    {
+      "class": "chanz",
+      "cn_name": "铲子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "木材"
+        },
+        {
+          "count": 1,
+          "raw_class": "塑料"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Shovel",
+      "time_consuming": 30
+    },
+    {
+      "class": "chuj",
+      "cn_name": "厨具",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "金属"
+        },
+        {
+          "count": 2,
+          "raw_class": "木材"
+        },
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Cooking Utensils",
+      "time_consuming": 45
+    },
+    {
+      "class": "tiz",
+      "cn_name": "梯子",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "金属"
+        },
+        {
+          "count": 2,
+          "raw_class": "木板"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Ladder",
+      "time_consuming": 60
+    },
+    {
+      "class": "dzh",
+      "cn_name": "电钻",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "金属"
+        },
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 1,
+          "raw_class": "芯片"
+        }
+      ],
+      "shop": "五金店",
+      "seq": "Drill",
+      "time_consuming": 120
+    },
+    {
+      "class": "suc",
+      "cn_name": "蔬菜",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "种子"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Vegetables",
+      "time_consuming": 20
+    },
+    {
+      "class": "mf",
+      "cn_name": "面粉",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "种子"
+        },
+        {
+          "count": 2,
+          "raw_class": "布料"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Flour Bag",
+      "time_consuming": 30
+    },
+    {
+      "class": "xig",
+      "cn_name": "西瓜",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "树苗"
+        },
+        {
+          "count": 2,
+          "raw_class": "种子"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Fruit and Berries",
+      "time_consuming": 90
+    },
+    {
+      "class": "naiy",
+      "cn_name": "奶油",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "饲料"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Cream",
+      "time_consuming": 75
+    },
+    {
+      "class": "yum",
+      "cn_name": "玉米",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "矿石"
+        },
+        {
+          "count": 4,
+          "raw_class": "种子"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Corn",
+      "time_consuming": 60
+    },
+    {
+      "class": "nail",
+      "cn_name": "奶酪",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "饲料"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Cheese",
+      "time_consuming": 105
+    },
+    {
+      "class": "niur",
+      "cn_name": "牛肉",
+      "raw_materials": [
+        {
+          "count": 3,
+          "raw_class": "饲料"
+        }
+      ],
+      "shop": "农贸市场",
+      "seq": "Beef",
+      "time_consuming": 150
+    },
+    {
+      "class": "yiz",
+      "cn_name": "椅子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "锤子"
+        },
+        {
+          "count": 1,
+          "raw_class": "钉子"
+        },
+        {
+          "count": 2,
+          "raw_class": "木材"
+        }
+      ],
+      "shop": "家具店",
+      "seq": "Chairs",
+      "time_consuming": 20
+    },
+    {
+      "class": "zhuoz",
+      "cn_name": "桌子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "锤子"
+        },
+        {
+          "count": 2,
+          "raw_class": "钉子"
+        },
+        {
+          "count": 1,
+          "raw_class": "木板"
+        }
+      ],
+      "shop": "家具店",
+      "seq": "Tables",
+      "time_consuming": 30
+    },
+    {
+      "class": "beiz",
+      "cn_name": "被子",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "尺子"
+        },
+        {
+          "count": 2,
+          "raw_class": "布料"
+        }
+      ],
+      "shop": "家具店",
+      "seq": "Home Textiles",
+      "time_consuming": 75
+    },
+    {
+      "class": "chug",
+      "cn_name": "橱柜",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "木板"
+        },
+        {
+          "count": 2,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 1,
+          "raw_class": "油漆"
+        }
+      ],
+      "shop": "家具店",
+      "seq": "Cupboard",
+      "time_consuming": 45
+    },
+    {
+      "class": "sf",
+      "cn_name": "沙发",
+      "raw_materials": [
+        {
+          "count": 3,
+          "raw_class": "布料"
+        },
+        {
+          "count": 1,
+          "raw_class": "胶水"
+        },
+        {
+          "count": 1,
+          "raw_class": "电钻"
+        }
+      ],
+      "shop": "家具店",
+      "seq": "Couch",
+      "time_consuming": 150
+    },
+    {
+      "class": "c",
+      "cn_name": "草",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "铲子"
+        },
+        {
+          "count": 1,
+          "raw_class": "种子"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Grass",
+      "time_consuming": 30
+    },
+    {
+      "class": "sm",
+      "cn_name": "树苗",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "铲子"
+        },
+        {
+          "count": 2,
+          "raw_class": "种子"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Tree Saplings",
+      "time_consuming": 90
+    },
+    {
+      "class": "tyjj",
+      "cn_name": "庭院家具",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "木板"
+        },
+        {
+          "count": 2,
+          "raw_class": "布料"
+        },
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Garden Furniture",
+      "time_consuming": 135
+    },
+    {
+      "class": "huok",
+      "cn_name": "火坑",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "砖块"
+        },
+        {
+          "count": 1,
+          "raw_class": "铲子"
+        },
+        {
+          "count": 2,
+          "raw_class": "水泥"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Fire Pit",
+      "time_consuming": 240
+    },
+    {
+      "class": "gcj",
+      "cn_name": "割草机",
+      "raw_materials": [
+        {
+          "count": 3,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "芯片"
+        },
+        {
+          "count": 1,
+          "raw_class": "油漆"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Lawn Mower",
+      "time_consuming": 120
+    },
+    {
+      "class": "dj",
+      "cn_name": "地精",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "水泥"
+        },
+        {
+          "count": 1,
+          "raw_class": "胶水"
+        }
+      ],
+      "shop": "园艺店",
+      "seq": "Garden Gnomes",
+      "time_consuming": 90
+    },
+    {
+      "class": "ttq",
+      "cn_name": "甜甜圈",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "面粉"
+        },
+        {
+          "count": 1,
+          "raw_class": "糖"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Donuts",
+      "time_consuming": 45
+    },
+    {
+      "class": "shab",
+      "cn_name": "沙冰",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "蔬菜"
+        },
+        {
+          "count": 1,
+          "raw_class": "西瓜"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Green Smoothie",
+      "time_consuming": 30
+    },
+    {
+      "class": "mb",
+      "cn_name": "面包",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "面粉"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶油"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Bread Roll",
+      "time_consuming": 60
+    },
+    {
+      "class": "dang",
+      "cn_name": "蛋糕",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "面粉"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶酪"
+        },
+        {
+          "count": 1,
+          "raw_class": "西瓜"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Cherry Cheesecake",
+      "time_consuming": 90
+    },
+    {
+      "class": "dsn",
+      "cn_name": "冻酸奶",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "西瓜"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶油"
+        },
+        {
+          "count": 1,
+          "raw_class": "糖"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Frozen Yogurt",
+      "time_consuming": 240
+    },
+    {
+      "class": "kf",
+      "cn_name": "咖啡",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "种子"
+        },
+        {
+          "count": 1,
+          "raw_class": "糖"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶油"
+        }
+      ],
+      "shop": "甜品店",
+      "seq": "Coffee",
+      "time_consuming": 60
+    },
+    {
+      "class": "maoz",
+      "cn_name": "帽子",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "布料"
+        },
+        {
+          "count": 1,
+          "raw_class": "尺子"
+        }
+      ],
+      "shop": "时装店",
+      "seq": "OHat",
+      "time_consuming": 60
+    },
+    {
+      "class": "xiez",
+      "cn_name": "鞋子",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "布料"
+        },
+        {
+          "count": 1,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 1,
+          "raw_class": "胶水"
+        }
+      ],
+      "shop": "时装店",
+      "seq": "Shoes",
+      "time_consuming": 75
+    },
+    {
+      "class": "sb",
+      "cn_name": "手表",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 1,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 1,
+          "raw_class": "化学"
+        }
+      ],
+      "shop": "时装店",
+      "seq": "Watch",
+      "time_consuming": 90
+    },
+    {
+      "class": "xz",
+      "cn_name": "西装",
+      "raw_materials": [
+        {
+          "count": 3,
+          "raw_class": "布料"
+        },
+        {
+          "count": 1,
+          "raw_class": "胶水"
+        },
+        {
+          "count": 1,
+          "raw_class": "尺子"
+        }
+      ],
+      "shop": "时装店",
+      "seq": "Business Suits",
+      "time_consuming": 210
+    },
+    {
+      "class": "bb",
+      "cn_name": "背包",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 2,
+          "raw_class": "布料"
+        },
+        {
+          "count": 1,
+          "raw_class": "尺子"
+        }
+      ],
+      "shop": "时装店",
+      "seq": "Backpack",
+      "time_consuming": 150
+    },
+    {
+      "class": "smz",
+      "cn_name": "三明治",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "面包"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶油"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Ice Cream Sandwich",
+      "time_consuming": 14
+    },
+    {
+      "class": "pis",
+      "cn_name": "披萨",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "面粉"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶酪"
+        },
+        {
+          "count": 1,
+          "raw_class": "牛肉"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Pizza",
+      "time_consuming": 24
+    },
+    {
+      "class": "hb",
+      "cn_name": "汉堡",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "牛肉"
+        },
+        {
+          "count": 1,
+          "raw_class": "面包"
+        },
+        {
+          "count": 1,
+          "raw_class": "BBQ"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Burgers",
+      "time_consuming": 35
+    },
+    {
+      "class": "st",
+      "cn_name": "薯条",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "蔬菜"
+        },
+        {
+          "count": 1,
+          "raw_class": "奶酪"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Cheese Fries",
+      "time_consuming": 20
+    },
+    {
+      "class": "nms",
+      "cn_name": "柠檬水",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "糖"
+        },
+        {
+          "count": 2,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 1,
+          "raw_class": "西瓜"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Lemonade Bottle",
+      "time_consuming": 60
+    },
+    {
+      "class": "bmh",
+      "cn_name": "爆米花",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "玉米"
+        },
+        {
+          "count": 1,
+          "raw_class": "微波炉"
+        }
+      ],
+      "shop": "快餐店",
+      "seq": "Popcorn",
+      "time_consuming": 30
+    },
+    {
+      "class": "bbq",
+      "cn_name": "BBQ",
+      "raw_materials": [
+        {
+          "count": 3,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "厨具"
+        }
+      ],
+      "shop": "家电店",
+      "seq": "BBQ Grill",
+      "time_consuming": 165
+    },
+    {
+      "class": "bx",
+      "cn_name": "冰箱",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 2,
+          "raw_class": "化学"
+        },
+        {
+          "count": 2,
+          "raw_class": "芯片"
+        }
+      ],
+      "shop": "家电店",
+      "seq": "Refrigerator",
+      "time_consuming": 210
+    },
+    {
+      "class": "dd",
+      "cn_name": "电灯",
+      "raw_materials": [
+        {
+          "count": 1,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 1,
+          "raw_class": "化学"
+        },
+        {
+          "count": 1,
+          "raw_class": "芯片"
+        }
+      ],
+      "shop": "家电店",
+      "seq": "Lighting System",
+      "time_consuming": 105
+    },
+    {
+      "class": "tv",
+      "cn_name": "电视",
+      "raw_materials": [
+        {
+          "count": 2,
+          "raw_class": "塑料"
+        },
+        {
+          "count": 2,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 2,
+          "raw_class": "芯片"
+        }
+       ],
+      "shop": "家电店",
+      "seq": "TV",
+      "time_consuming": 150
+    },
+    {
+      "class": "wbl",
+      "cn_name": "微波炉",
+      "raw_materials": [
+        {
+          "count": 4,
+          "raw_class": "金属"
+        },
+        {
+          "count": 1,
+          "raw_class": "玻璃"
+        },
+        {
+          "count": 1,
+          "raw_class": "芯片"
+        }
+       ],
+      "shop": "家电店",
+      "seq": "Microwave Oven",
+      "time_consuming": 120
+    }
+  ]
+}
