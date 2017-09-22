@@ -8,8 +8,6 @@ from datetime import datetime
 from io import BytesIO
 from io import StringIO
 
-import psutil
-
 import tsproxy.proxy
 from tsproxy import httphelper2 as httphelper
 from tsproxy import common, proxy, streams, topendns
@@ -78,6 +76,7 @@ class Listener:
 class HttpListener(Listener):
 
     def __init__(self, listen_addr, connector, loop=None, **kwargs):
+        import psutil
         kwargs.setdefault('name', 'http')
         super().__init__(listen_addr, loop=loop,
                          decoder=HttpRequestDecoder(), encoder=HttpResponseEncoder(), **kwargs)
@@ -111,6 +110,7 @@ class HttpListener(Listener):
         return proxy_name
 
     def get_connection_process(self, connection):
+        import psutil
         if not self._root_access:
             return
         try:

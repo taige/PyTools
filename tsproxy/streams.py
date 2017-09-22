@@ -77,6 +77,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
         self._connection = None
         self._encoder = encoder
         self._acl_ips = acl_ips
+        self._close_waiter = None
 
     def connection_made(self, transport):
         _socket = transport.get_extra_info('socket')
@@ -113,7 +114,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                     try:
                         yield from res
                     except BaseException as ex:
-                        logger.exception("handle connect %s %s: %s", self._connection, ex1.__class__.__name__, ex)
+                        logger.exception("handle connect %s %s: %s", self._connection, ex.__class__.__name__, ex)
                     finally:
                         try:
                             if self._connection.reader.exception() is None and not self._connection_lost \
@@ -133,6 +134,16 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
             StreamProtocol._connection_counter -= 1
             logger.debug('connection_lost#%d: %s lived %.2f seconds', StreamProtocol._connection_counter, self._connection, self._connection.life_time)
         super().connection_lost(exc)
+        waiter = self._close_waiter
+        if waiter is None:
+            return
+        self._close_waiter = None
+        if waiter.done():
+            return
+        if exc is None:
+            waiter.set_result(None)
+        else:
+            waiter.set_exception(exc)
 
     def data_received(self, data):
         _log_data('%s received' % self.connection, data)
@@ -155,6 +166,16 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
     @property
     def connection(self):
         return self._connection
+
+    @asyncio.coroutine
+    def _close_helper(self):
+        if self._connection_lost:
+            return
+        waiter = self._close_waiter
+        assert waiter is None or waiter.cancelled()
+        waiter = self._loop.create_future()
+        self._close_waiter = waiter
+        yield from waiter
 
 
 class StreamConnection(dict):
@@ -247,6 +268,12 @@ class StreamConnection(dict):
         self._closing = True
         if not self._reader.at_eof():
             self._reader.feed_eof_by_close()
+
+    @asyncio.coroutine
+    def aclose(self):
+        self.close()
+        yield
+        yield from self._writer._protocol._close_helper()
 
     @property
     def is_closing(self):

@@ -37,8 +37,8 @@ ResponseMessage = collections.namedtuple(
 class HttpParser(http_parser.HttpParser):
 
     def __init__(self, max_line_size=10240, max_headers=32768,
-                 max_field_size=10240):
-        super().__init__(max_line_size, max_headers, max_field_size)
+                 max_field_size=10240, **kwargs):
+        super().__init__(max_line_size=max_line_size, max_headers=max_headers, max_field_size=max_field_size, **kwargs)
 
     def _parse_version(self, version):
         try:
