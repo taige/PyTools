@@ -504,7 +504,8 @@ class Product(Material):
 
     def find_child(self, name):
         for child in self.children:
-            if child.cn_name == name and child.batch_id == self.batch_id:
+            # if child.cn_name == name and child.batch_id == self.batch_id:
+            if child.cn_name == name and not child.is_done():
                 return child
         for child in self.children:
             c = child.find_child(name)
@@ -595,6 +596,7 @@ class Product(Material):
 
     @property
     def products(self):
+        # TODO 检查仓库商品是否与需求一致
         if 'products' in self and (self.consumed or ('_products_timestamp' in self and (time.time() - self['_products_timestamp']) < 0.1 and not self._city.warehouse.changed)):
             return self['products']
         self['products'] = MaterialList()
@@ -715,7 +717,7 @@ class Product(Material):
         if 'product_done' in self:
             return self['product_done']
         if self.depth < 0:
-            if (self.is_for_sell and len(self.children) == 0) or (len(self.root.needs) == len(self.root.products)):
+            if (self.is_for_sell and len(self.children) == 0) or len(self.root.get_undone_list()) == 0:
                 self['product_done'] = True
                 return True
         return False

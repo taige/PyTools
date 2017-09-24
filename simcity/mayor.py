@@ -287,6 +287,10 @@ class Mayor:
                             if _unconsumed != '':
                                 _unconsumed += ', '
                             _unconsumed += '%d*%s' % (_n, k)
+                # 未入仓库的产品要先入库
+                for c in _consumed:
+                    if isinstance(c, Product) and not c.in_warehouse:
+                        self._city.factories.move_to_warehouse(c)
                 self._city.cprint('已消费批次[#%d]中的 %s%s%s' % (batch_id, _consumed, (', 留存 %s' % _not_consumed) if len(_not_consumed) > 0 else '',
                                                            '' if _unconsumed is None else ', \x1b[1;37;41m缺少了 %s\x1b[0m' % _unconsumed))
             else:
@@ -318,6 +322,10 @@ class Mayor:
                 return
             consumed = []
             if self._city.warehouse.consume(*material_list, batch_id=0, consumed=consumed):
+                # 未入仓库的产品要先入库
+                for c in consumed:
+                    if isinstance(c, Product) and not c.in_warehouse:
+                        self._city.factories.move_to_warehouse(c)
                 self._city.cprint('已消费 %s' % consumed)
                 self._city.wakeup()
             else:

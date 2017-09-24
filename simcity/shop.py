@@ -34,8 +34,10 @@ class Shop(Factories):
         # 使用了别的batch的原料的话，要归还
         for p in product.raw_consumed:
             if isinstance(p, Product) and p.batch_id != 0 and p.batch_id != product.batch_id:
-                # child要从batch开始find
-                c = product.root.find_child(p.cn_name)
+                c = product.find_child(p.cn_name)
+                if c is None:
+                    # 在当前product下找不到的话，在批次内找
+                    c = product.root.find_child(p.cn_name)
                 if c is not None:
                     _log = '生产[%s]使用了批次[%d]的原料[%s.%d]，将[%s]归还给原批次' % (product, p.batch_id, p, p.depth, c)
                     c.batch_id = abs(p.batch_id)

@@ -710,8 +710,9 @@ class SimCity(Listener, dict):
             if try_warehouse and parent_chain.use_warehouse and self.warehouse.consume(material, batch_id=parent_chain.batch_id, consumed=_warehouse_consumed):
                 if isinstance(_warehouse_consumed[0], Product):
                     _warehouse_consumed[0].batch_id = parent_chain.batch_id if depth > 0 else -parent_chain.batch_id
+                    _warehouse_consumed[0].depth = depth
                 else:
-                    _warehouse_consumed[0] = Product(material=material, batch_id=parent_chain.batch_id if depth > 0 else -parent_chain.batch_id, city=self, in_warehouse=True)
+                    _warehouse_consumed[0] = Product(material=material, batch_id=parent_chain.batch_id if depth > 0 else -parent_chain.batch_id, depth=depth, city=self, in_warehouse=True)
                 warehouse_will_used.append(_warehouse_consumed[0])
                 continue
             chain = Product(material=material, parent=parent_chain, depth=depth, city=self)
