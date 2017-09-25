@@ -412,7 +412,6 @@ class Mayor:
                 p_j = json.loads(' '.join(args))
                 prod.update(p_j)
                 out.write('%s: %s' % (prod, json.dumps(prod, indent=2, ensure_ascii=False, sort_keys=True)))
-                break
             elif sub_cmd == 'start':
                 if prod.start_timing >= 0:
                     out.write('产品 %s 已经开始生产' % prod)
@@ -617,7 +616,7 @@ class Mayor:
                 out.write('%s: %d/%d %s' % (format_cn(self._city.factories.cn_name, 8, left_align=True), self._city.factories.idle_slot, self._city.factories.slot,
                                             self._city.factories.print_arrangement(print_idle=True)))
         elif cmd.startswith('ware'):  # warehouse
-            self._cmd_ware(args)
+            yield from self._cmd_ware(args)
         elif cmd == 'show':
             show_what = 'p' if len(args) == 0 else args[0]
             if show_what.startswith('m'):
