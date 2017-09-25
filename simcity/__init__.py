@@ -505,13 +505,13 @@ class Product(Material):
                     _undone.append(k)
         return _undone
 
-    def find_child(self, name):
+    def find_child(self, name, ret_prods: list):
         for child in self.children:
             # if child.cn_name == name and child.batch_id == self.batch_id:
-            if child.cn_name == name and not child.is_done():
+            if child.cn_name == name and not child.is_done() and child.pid not in ret_prods:
                 return child
         for child in self.children:
-            c = child.find_child(name)
+            c = child.find_child(name, ret_prods)
             if c is not None:
                 return c
         return None

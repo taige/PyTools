@@ -34,6 +34,7 @@ class SimCity(Listener, dict):
         self.setdefault('_city_zero_timing', self._zero_timing())
         self.setdefault('city_nick_name', 'SC')
         self.setdefault('warehouse_capacity', 100)
+        self.setdefault('auto_into_warehouse', False)
         self.setdefault('_special_products', 0)
         self.__nearest_producted = None
         self._nearest_producted_timing = -1
@@ -186,6 +187,14 @@ class SimCity(Listener, dict):
         self['_double_confirm'] = u
 
     @property
+    def auto_into_warehouse(self):
+        return self['auto_into_warehouse']
+
+    @auto_into_warehouse.setter
+    def auto_into_warehouse(self, u):
+        self['auto_into_warehouse'] = u
+
+    @property
     def one_minute(self):
         if 'one_minute' not in self:
             self['one_minute'] = 60
@@ -249,13 +258,14 @@ class SimCity(Listener, dict):
         # TODO capacity计数可以优化
         # 生产中的物料最小仓库占用
         ps = self.get_producting_list(sort_by_done=False, include_pending=True)
-        n = 0
+        n = 2  # 留出2个空余
         children_max = 0
         if to_start is not None:
             ps.extend(to_start)
         for p in ps:
             if p.depth == 0:
-                n += 1
+                if children_max < len(p.root.needs):
+                    children_max = len(p.root.needs)
             else:
                 if children_max < len(p.parent.children):
                     children_max = len(p.parent.children)
@@ -409,6 +419,10 @@ class SimCity(Listener, dict):
     def display_notification(self, content, subtitle=None):
         if self.nfc_on:
             os.system('osascript -e \'display notification "%s" with title "SimCity-%s" %s\'' % (content, self.city_nick_name, 'subtitle "%s"' % subtitle if subtitle is not None else ''))
+
+    def move_product_to_warehouse(self, product: Product):
+        _fact = self.factories if product.is_factory_material else self.get_shop(product.shop_name)
+        return _fact.move_to_warehouse(product)
 
     def has_products_to_start(self) -> dict:
         products_to_start = OrderedDict()

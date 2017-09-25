@@ -262,7 +262,7 @@ class Factories(dict):
                               '' if m.depth > 0 else '\x1b[4;38;48m', repr(m),
                               fmt_time(self._city.city_timing - m.start_timing),
                               fmt_time(self._city.city_timing - m.arrange_timing))
-            if m.depth == 0:
+            if m.depth == 0 and self._city.auto_into_warehouse:
                 self.move_to_warehouse(m, i)
             return m
         else:
@@ -316,8 +316,7 @@ class Factories(dict):
 
     def _compose_factory_arrange_detail(self):
         _arrange_str = '['
-        for i in range(0, self.slot):
-            pid = self._factory[i]
+        for pid in sorted(self._factory, key=lambda _pid: 0 if _pid is None else self._producting(abs(_pid)).latest_product_timing):
             if pid is None:
                 continue
             if _arrange_str != '[':
@@ -325,12 +324,14 @@ class Factories(dict):
             p = self._producting(abs(pid), raise_on_nf=False)
             if p is None:
                 _arrange_str += '\x1b[2;38;46m%d\x1b[0m' % (abs(pid) % 1000)
-            elif p.depth == 0:
-                _arrange_str += '\x1b[4;38;48m%s\x1b[0m' % repr(p)
-            elif pid < 0:
-                _arrange_str += '\x1b[2;38;46m%s\x1b[0m' % repr(p)
             else:
+                if p.depth == 0:
+                    _arrange_str += '\x1b[4;38;48m'
+                if pid < 0:
+                    _arrange_str += '\x1b[2;38;46m'
                 _arrange_str += '%s' % repr(p)
+                if p.depth == 0 or pid < 0:
+                    _arrange_str += '\x1b[0m'
         if self.idle_slot > 0:
             if _arrange_str != '[':
                 _arrange_str += '|'

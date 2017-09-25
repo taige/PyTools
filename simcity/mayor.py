@@ -291,7 +291,7 @@ class Mayor:
                 # 未入仓库的产品要先入库
                 for c in _consumed:
                     if isinstance(c, Product) and not c.in_warehouse:
-                        self._city.factories.move_to_warehouse(c)
+                        self._city.move_product_to_warehouse(c)
                 self._city.cprint('已消费批次[#%d]中的 %s%s%s' % (batch_id, _consumed, (', 留存 %s' % _not_consumed) if len(_not_consumed) > 0 else '',
                                                            '' if _unconsumed is None else ', \x1b[1;37;41m缺少了 %s\x1b[0m' % _unconsumed))
             else:
@@ -326,7 +326,7 @@ class Mayor:
                 # 未入仓库的产品要先入库
                 for c in consumed:
                     if isinstance(c, Product) and not c.in_warehouse:
-                        self._city.factories.move_to_warehouse(c)
+                        self._city.move_product_to_warehouse(c)
                 self._city.cprint('已消费 %s' % consumed)
                 self._city.wakeup()
             else:
@@ -441,7 +441,7 @@ class Mayor:
                 if not prod.is_done():
                     out.write('产品 %s 尚未完成生产' % prod)
                     continue
-                if not self._city.factories.move_to_warehouse(prod):
+                if not self._city.move_product_to_warehouse(prod):
                     self._city.cprint('\x1b[1;37;41m移动 %s 至仓库失败\x1b[0m', repr(prod))
             else:
                 if prod.start_timing < 0:
@@ -533,6 +533,7 @@ class Mayor:
         # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; ware 移入仓库; +/- time_delta 调整完成时间
         ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} |[+ | -] TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
         ('通知中心', 'nfc', '[on | off]'),
+        ('自动入库', 'auto_ware', '[on | off]'),
         ('二次确认', 'confirm', '[N]'),
         ('查看城市', 'show', '[c(ity) | m(aterial) | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
         ('保存城市', 'dump', '[xxx.json]'),
@@ -549,7 +550,7 @@ class Mayor:
     @asyncio.coroutine
     def _cmd_handle(self, cmd_line):
         out = self._connection
-        args = cmd_line.split()
+        args = cmd_line.lower().split()
         if len(args) == 0:
             # 让city检查是否有排产需求
             self._city.wakeup()
@@ -568,6 +569,15 @@ class Mayor:
             elif args[0] == 'off':
                 self._city.nfc_on = False
             self._city.cprint('Notification Center set to %s' % ('on' if self._city.nfc_on else 'off'))
+        elif cmd.startswith('auto'):
+            if len(args) == 0:
+                out.write('Auto Move into Warehouse is %s' % ('on' if self._city.auto_into_warehouse else 'off'))
+                return
+            if args[0] == 'on':
+                self._city.auto_into_warehouse = True
+            elif args[0] == 'off':
+                self._city.auto_into_warehouse = False
+            self._city.cprint('Auto Move into Warehouse set to %s' % ('on' if self._city.auto_into_warehouse else 'off'))
         elif cmd.startswith('conf'):  # confirm
             if len(args) == 0:
                 out.write('double Confirm is %d' % self._city.double_confirm)
