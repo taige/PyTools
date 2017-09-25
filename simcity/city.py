@@ -133,7 +133,7 @@ class SimCity(Listener, dict):
     def _waiting(self):
         _waiting_list = []
         for p in self._producting_batch:
-            self._collect_waiting(p.children, _waiting_list)
+            self.collect_waiting(p.children, _waiting_list)
         return _waiting_list
 
     @property
@@ -315,9 +315,9 @@ class SimCity(Listener, dict):
                 return w
         return None
 
-    def _collect_waiting(self, chain, waiting_list):
+    def collect_waiting(self, chain, waiting_list):
         for c in chain:
-            self._collect_waiting(c.children, waiting_list)
+            self.collect_waiting(c.children, waiting_list)
             if c.start_timing < -1 and not c.is_done():
                 waiting_list.append(c)
 

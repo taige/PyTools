@@ -420,6 +420,9 @@ class Product(Material):
         super().__init__(**kwargs)
         self._material = material
 
+        if depth >= 0 and self._material is None:
+            raise Exception('非生产批次对象[%d]但是没有指定生产物料' % depth)
+
         if 'p_pid' not in self:
             Product.PID += 1
             self['p_pid'] = Product.PID
@@ -441,19 +444,15 @@ class Product(Material):
         else:
             self['batch_id'] = batch_id
 
-        if self._material is None:
-            self._id_str_ = "%d#ROOT" % abs(self.batch_id)
+        if depth < 0:
             self['cn_name'] = "%d#ROOT" % abs(self.batch_id)
-        else:
-            self._id_str_ = '%d.%d#%s' % (abs(self.batch_id), self.pid % 1000, self._material.cn_name if isinstance(self._material, Material) else self._material)
-            self['cn_name'] = self._material.cn_name
-
-        if depth == -1:
             _products = MaterialList()
             if 'products' in self:
                 for p in self['products']:
                     _products.append(p)
             self['products'] = _products
+        else:
+            self['cn_name'] = self._material.cn_name
 
         self._city = city
         if self._city is None:
@@ -479,6 +478,10 @@ class Product(Material):
 
     def __repr__(self):
         return self._id_str_
+
+    @property
+    def _id_str_(self):
+        return "%d#ROOT" % abs(self.batch_id) if self.depth < 0 else '%d.%d#%s' % (abs(self.batch_id), self.pid % 1000, self._material.cn_name if isinstance(self._material, Material) else self._material)
 
     @property
     def consumed_info(self):
@@ -677,10 +680,6 @@ class Product(Material):
     @batch_id.setter
     def batch_id(self, bid):
         self['batch_id'] = bid
-        if self._material is None:
-            self._id_str_ = "%d#ROOT" % abs(bid)
-        else:
-            self._id_str_ = '%d.%d#%s' % (abs(bid), self.pid % 1000, self._material.cn_name if isinstance(self._material, Material) else self._material)
 
     @property
     def pid(self):

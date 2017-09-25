@@ -1,4 +1,5 @@
 import subprocess
+import json
 
 from simcity import *
 
@@ -217,7 +218,7 @@ class Mayor:
             self._waiting_ui = False
 
     @asyncio.coroutine
-    def _ui_consume_batch(self, args):
+    def _consume_batch(self, args):
         out = self._connection
         batch_id = int(args[0])
         args.pop(0)
@@ -301,14 +302,14 @@ class Mayor:
         self._city.show_city_status(show_all=True, out=out)
 
     @asyncio.coroutine
-    def _ui_consume(self, args):
+    def _cmd_consume(self, args):
         out = self._connection
         if len(args) == 0:
             self._print_help(out)
             return
         try:
             # assume consume a batch of materials
-            yield from self._ui_consume_batch(args)
+            yield from self._consume_batch(args)
         except ValueError:
             # consume materials list
             material_list, not_found = MaterialList.needs2list(args)
@@ -338,7 +339,7 @@ class Mayor:
                     _stock += '%s*%d ' % (k, self._city.warehouse.products_count(k))
                 out.write('库存不足, 缺: %s, 库存: %s' % (_needs, _stock))
 
-    def _ui_shop_detail(self, shop):
+    def _shop_detail(self, shop):
         out = self._connection
         _s = '%s: %s' % (format_cn('%s%s%s' % (shop.cn_name, '★' * shop.stars, (' x%d' % shop.speed_up_times) if shop.speed_up_end_timing > self._city.city_timing else ''), 13, left_align=True),
                          shop.print_arrangement(print_idle=True))
@@ -346,11 +347,11 @@ class Mayor:
             _s += ' \x1b[1;33;48m{加速币(x%d) 剩余时效%s}\x1b[0m' % (shop.speed_up_times, fmt_time(shop.speed_up_end_timing - self._city.city_timing))
         out.write(_s)
 
-    def _ui_shop(self, cmd_line):
+    def _cmd_shop(self, cmd_line):
         out = self._connection
         if len(cmd_line) < 1:
             for shop in self._city.shops:
-                self._ui_shop_detail(shop)
+                self._shop_detail(shop)
             return
         shop_name = cmd_line.pop(0)
         shop = self._city.get_shop(shop_name)
@@ -384,36 +385,16 @@ class Mayor:
             else:
                 self._print_help(out)
         else:
-            self._ui_shop_detail(shop)
+            self._shop_detail(shop)
 
-    _help_message = (
-        ('消费库存', 'consume', '2*西瓜 3*面包 | BATCH_ID [= | [-] 1*西瓜 1*面包]'),
-        ('看/加库存', 'warehouse', '[2*西瓜 3*面包 | [+|-]CAPACITY]'),
-        ('时间快进', 'forward', '[N]'),
-        ('工厂设置', 'fact', '[slot [1]]'),
-        ('商店设置', 'shop', '[建材店|jcd [slot [1] | speed [2 [3600] | star [1]]]'),
-        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; ware 移入仓库; +/- time_delta 调整完成时间
-        ('生产设置', 'prod', 'PID start | del | ware | [+ | -] TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
-        ('通知中心', 'nfc', '[on | off]'),
-        ('二次确认', 'confirm', '[N]'),
-        ('查看城市', 'show', '[c(ity) | m(aterial) | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
-        ('保存城市', 'dump', '[xxx.json]'),
-        ('从头生产', '++', '2*西瓜 3*面包 [; 1*shab 3*muc]'),
-        ('生产', '+', '[--air | --npc | --ship] 2*西瓜 3*面包 [; 1*shab 3*muc]')
-    )
-
-    def _print_help(self, out):
-        _max1 = len(max(*self._help_message, key=lambda m: len(m[0].encode('GBK')))[0].encode('GBK')) + 1
-        _max2 = len(max(*self._help_message, key=lambda m: len(m[1].encode('GBK')))[1].encode('GBK')) + 1
-        for msg in self._help_message:
-            out.write('%s: %s %s' % (format_cn(msg[0], _max1, left_align=True), format_cn('\x1b[4;38;48m\x1b[1;38;48m%s\x1b[0m' % msg[1], _max2, left_align=True), msg[2]))
-
-    def _ui_prod(self, args):
+    def _cmd_prod(self, args):
         out = self._connection
         pids = args.pop(0).split(',')
-        sub_cmd = args[0]
+        sub_cmd = args[0] if len(args) > 0 else 'show'
+        if sub_cmd.startswith('{') and args[len(args)-1].endswith('}'):
+            sub_cmd = 'set'
         start_dict = {}
-        if sub_cmd not in ('start', 'del', 'ware'):
+        if sub_cmd not in ('start', 'del', 'delete', 'ware', 'show', 'set'):
             sub_cmd = args.pop(0) if len(args) > 1 else '='
             if sub_cmd not in ('+', '-', '='):
                 self._print_help(out)
@@ -425,7 +406,14 @@ class Mayor:
             if prod is None:
                 out.write('没有找到编号为 %d 的产品' % pid)
                 continue
-            if sub_cmd == 'start':
+            if sub_cmd == 'show':
+                out.write('%s: %s' % (prod, json.dumps(prod, indent=2, ensure_ascii=False, sort_keys=True)))
+            elif sub_cmd == 'set':
+                p_j = json.loads(' '.join(args))
+                prod.update(p_j)
+                out.write('%s: %s' % (prod, json.dumps(prod, indent=2, ensure_ascii=False, sort_keys=True)))
+                break
+            elif sub_cmd == 'start':
                 if prod.start_timing >= 0:
                     out.write('产品 %s 已经开始生产' % prod)
                     continue
@@ -436,15 +424,20 @@ class Mayor:
                     _start_list = []
                     start_dict[_fact] = _start_list
                 _start_list.append(prod)
-            elif sub_cmd == 'del':
+            elif sub_cmd.startswith('del'):
                 if prod.start_timing >= -1:
                     out.write('产品 %s 已经开始生产, 没法删除' % prod)
                     continue
-                _fact = self._city.factories if prod.is_factory_material else self._city.get_shop(prod.shop_name)
-                if _fact.waiting_delete(prod):
-                    self._city.cprint('产品 %s 已从生产队列中删除', prod)
-                else:
-                    out.write('产品 %s 删除失败, 也许没在 %s 的生产队列中' % (prod, _fact.cn_name))
+                to_del = []
+                if sub_cmd == 'delete':
+                    self._city.collect_waiting(prod.children, to_del)
+                to_del.append(prod)
+                for _del in sorted(to_del, key=lambda d: d.latest_product_timing):
+                    _fact = self._city.factories if _del.is_factory_material else self._city.get_shop(_del.shop_name)
+                    if _fact.waiting_delete(_del):
+                        self._city.cprint('产品 %s 已从生产队列中删除', _del)
+                    else:
+                        out.write('产品 %s 删除失败, 也许没在 %s 的生产队列中' % (_del, _fact.cn_name))
             elif sub_cmd == 'ware':
                 if not prod.is_done():
                     out.write('产品 %s 尚未完成生产' % prod)
@@ -469,10 +462,90 @@ class Mayor:
         if sub_cmd == 'start':
             if len(start_dict) > 0:
                 self.put_job(start_dict)
-        elif sub_cmd == 'del':
+        elif sub_cmd.startswith('del'):
             self._city.show_city_status(show_all=True, out=out)
-        else:
+        elif sub_cmd != 'show':
             self._city.wakeup()
+
+    def _cmd_ware(self, args):
+        out = self._connection
+        if len(args) > 0 and args[0] != 'show':
+            try:
+                capa = int(args[0])
+                if args[0].startswith('+') or args[0].startswith('-'):
+                    self._city.products_capacity += capa
+                else:
+                    self._city.warehouse_capacity = capa
+            except ValueError:
+                material_list, not_found = MaterialList.needs2list(args)
+                if len(not_found) > 0:
+                    out.write("在产品列表中没有找到 %s" % not_found)
+                    MaterialDict.show_dict(out, self._city)
+                    return
+                elif len(material_list) == 0:
+                    return
+                elif not (yield from self._confirm_materials(material_list, '入库')):
+                    return
+                self._city.warehouse.extend(material_list)
+                self._city.cprint('成功入库: %s', material_list)
+            out.write('仓库: %d/%d(%d)/(%d)%d' %
+                      (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
+                       self._city.warehouse_capacity))
+            self._city.wakeup()
+        elif len(args) > 0:
+            if len(args) > 1:
+                need = args[1]
+                if not MaterialDict.has(need):
+                    _m = MaterialDict.get_by_en_name(need)
+                    if _m is None:
+                        out.write("在产品列表中没有找到 %s" % need)
+                        return
+                    else:
+                        need = _m.cn_name
+                w = []
+                for p in self._city.warehouse:
+                    if (isinstance(p, Product) and p.cn_name == need) or (isinstance(p, str) and p == need):
+                        w.append(p)
+            else:
+                w = self._city.warehouse
+            out.write('仓库: %d/%d(%d)/(%d)%d\n%s' %
+                      (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
+                       self._city.warehouse_capacity, json.dumps(w, indent=2, ensure_ascii=False, sort_keys=True)))
+        else:
+            # 未实际入库的商品分开显示
+            _in_fact = []
+            _in_ware = []
+            for p in self._city.warehouse:
+                if not isinstance(p, Product) or p.in_warehouse:
+                    _in_ware.append(p)
+                else:
+                    _in_fact.append(p)
+            out.write('仓库: %d/%d(%d)/(%d)%d%s%s' %
+                      (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
+                       self._city.warehouse_capacity, '\n%s%s' % (' ' * 15, MaterialList.to_str(_in_ware, prefix='', suffix='')) if len(_in_ware) > 0 else '',
+                       '\n%s\x1b[2;38;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
+
+    _help_message = (
+        ('消费库存', 'consume', '2*西瓜 3*面包 | BATCH_ID [= | [-] 1*西瓜 1*面包]'),
+        ('看/加库存', 'warehouse', '[show [xig] | 2*西瓜 3*面包 | [+|-]CAPACITY]'),
+        ('时间快进', 'forward', '[N]'),
+        ('工厂设置', 'fact', '[slot [1]]'),
+        ('商店设置', 'shop', '[建材店|jcd [slot [1] | speed [2 [3600] | star [1]]]'),
+        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; ware 移入仓库; +/- time_delta 调整完成时间
+        ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} |[+ | -] TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
+        ('通知中心', 'nfc', '[on | off]'),
+        ('二次确认', 'confirm', '[N]'),
+        ('查看城市', 'show', '[c(ity) | m(aterial) | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
+        ('保存城市', 'dump', '[xxx.json]'),
+        ('从头生产', '++', '2*西瓜 3*面包 [; 1*shab 3*muc]'),
+        ('生产', '+', '[--air | --npc | --ship] 2*西瓜 3*面包 [; 1*shab 3*muc]')
+    )
+
+    def _print_help(self, out):
+        _max1 = len(max(*self._help_message, key=lambda m: len(m[0].encode('GBK')))[0].encode('GBK')) + 1
+        _max2 = len(max(*self._help_message, key=lambda m: len(m[1].encode('GBK')))[1].encode('GBK')) + 1
+        for msg in self._help_message:
+            out.write('%s: %s %s' % (format_cn(msg[0], _max1, left_align=True), format_cn('\x1b[4;38;48m\x1b[1;38;48m%s\x1b[0m' % msg[1], _max2, left_align=True), msg[2]))
 
     @asyncio.coroutine
     def _cmd_handle(self, cmd_line):
@@ -486,7 +559,7 @@ class Mayor:
         if cmd == 'help':
             self._print_help(out)
         elif cmd.startswith('cons'):  # consume
-            yield from self._ui_consume(args)
+            yield from self._cmd_consume(args)
         elif cmd == 'nfc':
             if len(args) == 0:
                 out.write('Notification Center is %s' % ('on' if self._city.nfc_on else 'off'))
@@ -520,16 +593,16 @@ class Mayor:
             forward = int(args[0]) if len(args) > 0 else 1
             self._city.wakeup(forward)
         elif cmd.startswith('prod'):  # product
-            if len(args) < 2:
+            if len(args) < 1:
                 self._print_help(out)
                 return
             try:
-                self._ui_prod(args)
+                self._cmd_prod(args)
             except ValueError:
                 self._print_help(out)
                 return
         elif cmd == 'shop':
-            self._ui_shop(args)
+            self._cmd_shop(args)
         elif cmd.startswith('fact'):  # factories
             if len(args) > 0:
                 sub_cmd = args.pop(0)
@@ -544,41 +617,7 @@ class Mayor:
                 out.write('%s: %d/%d %s' % (format_cn(self._city.factories.cn_name, 8, left_align=True), self._city.factories.idle_slot, self._city.factories.slot,
                                             self._city.factories.print_arrangement(print_idle=True)))
         elif cmd.startswith('ware'):  # warehouse
-            if len(args) > 0:
-                try:
-                    capa = int(args[0])
-                    if args[0].startswith('+') or args[0].startswith('-'):
-                        self._city.products_capacity += capa
-                    else:
-                        self._city.warehouse_capacity = capa
-                except ValueError:
-                    material_list, not_found = MaterialList.needs2list(args)
-                    if len(not_found) > 0:
-                        out.write("在产品列表中没有找到 %s" % not_found)
-                        MaterialDict.show_dict(out, self._city)
-                        return
-                    elif len(material_list) == 0:
-                        return
-                    elif not (yield from self._confirm_materials(material_list, '入库')):
-                        return
-                    self._city.warehouse.extend(material_list)
-                    self._city.cprint('成功入库: %s', material_list)
-                out.write('仓库: %d/%d(%d)/(%d)%d' %
-                          (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products']+self._city.warehouse.products_len), self._city.warehouse_capacity))
-                self._city.wakeup()
-            else:
-                # 未实际入库的商品分开显示
-                _in_fact = []
-                _in_ware = []
-                for p in self._city.warehouse:
-                    if not isinstance(p, Product) or p.in_warehouse:
-                        _in_ware.append(p)
-                    else:
-                        _in_fact.append(p)
-                out.write('仓库: %d/%d(%d)/(%d)%d%s%s' %
-                          (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products']+self._city.warehouse.products_len), self._city.warehouse_capacity,
-                           '\n%s%s' % (' '*15, MaterialList.to_str(_in_ware, prefix='', suffix='')) if len(_in_ware) > 0 else '',
-                           '\n%s\x1b[2;38;46m%s\x1b[0m' % (' '*15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
+            self._cmd_ware(args)
         elif cmd == 'show':
             show_what = 'p' if len(args) == 0 else args[0]
             if show_what.startswith('m'):
