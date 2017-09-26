@@ -330,6 +330,19 @@ class MaterialList(list):
                         continue
             self.append(m)
 
+    def __sub__(self, other):
+        if not isinstance(other, list):
+            raise Exception('not supported operation on class: %s' % other.__class__.__name__)
+        if not isinstance(other, MaterialList):
+            other = MaterialList(other)
+        res = MaterialList()
+        for k in self.material_kinds:
+            n = self.count(k) - other.count(k)
+            if n > 0:
+                for _ in range(n):
+                    res.append(k)
+        return res
+
     def count(self, name):
         t = 0
         for key in self:
@@ -497,13 +510,7 @@ class Product(Material):
         return None
 
     def get_undone_list(self):
-        _undone = MaterialList()
-        for k in self.needs.material_kinds:
-            _n = self.needs.count(k) - self.products.count(k)
-            if _n > 0:
-                for i in range(_n):
-                    _undone.append(k)
-        return _undone
+        return self.needs - self.products
 
     def find_child(self, name, ret_prods: list):
         for child in self.children:

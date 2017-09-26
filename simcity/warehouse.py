@@ -105,7 +105,7 @@ class Warehouse(MaterialList):
                 else:
                     _str_ += '['
                 if p_batchid in _batch_cache:
-                    _str_ += ' ... \x1b[2;38;46m%s\x1b[0m]' % MaterialList.to_str(_batch_cache[p_batchid], prefix='', suffix='')
+                    _str_ += ' ... \x1b[0;34;46m%s\x1b[0m]' % MaterialList.to_str(_batch_cache[p_batchid], prefix='', suffix='')
                 else:
                     _str_ += ']'
                 if self._city.is_batch_done(p_batchid):

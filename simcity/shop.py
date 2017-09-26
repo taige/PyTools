@@ -17,10 +17,10 @@ class Shop(Factories):
 
     def _product(self, product: Product, force=False):
         '''尝试排产（如果有空闲生产位的话）'''
-        _consumed = []
+        _consumed = MaterialList()
         if not self._city.warehouse.consume(*product.raw_materials, batch_id=product.batch_id, consumed=_consumed,
-                                            exact_batch=product.is_for_sell, any_batch=self.idle_slot == self.slot, anything=force):
-            return '没有足够的原材料: %s/%s' % (product.raw_materials, product.raw_consumed)
+                                            exact_batch=product.is_for_sell, any_batch=self.available_slot == self.slot, anything=force):
+            return '没有足够的原材料: %s, 预期: %s, 实际: %s' % (product.raw_materials, product.raw_consumed, _consumed)
         else:
             product.raw_consumed = _consumed
             self._if_consumed_another_raw(product)
@@ -53,16 +53,12 @@ class Shop(Factories):
         # 商店只能按顺序移入仓库
         for idx in range(0, self.slot):
             pid = self._factory[idx]
-            if pid is None:
+            if pid is None or pid > 0:
                 continue
-            if pid < 0:
-                p = self._factory_del(idx)
-                if p is not None:
-                    p.in_warehouse = True
-                self._city.cprint('    \x1b[1;38;44m%s 进入仓库\x1b[0m.%d', repr(p) if p is not None else abs(pid), self._city.warehouse.capacity)
-            if abs(pid) == product.pid:
+            self._move_fact_to_ware(idx, product)
+            if product is not None and -pid == product.pid:
                 return True
-        return False
+        return product is None
 
     def _check_slot_done(self, i):
         m = super()._check_slot_done(i)
@@ -90,13 +86,15 @@ class Shop(Factories):
                 _arrange_str += '..'
                 continue
             p = self._producting(abs(pid))
+            if pid < 0:
+                _arrange_str += '\x1b[0;34;46m'
             if p.depth == 0:
                 _arrange_str += '\x1b[4;38;48m'
-            if pid < 0:
-                _arrange_str += '\x1b[2;38;46m'
             if batch_id == 0 or p.batch_id == batch_id:
                 _arrange_str += '%s' % (p if batch_id != 0 else repr(p))
             if p.depth == 0 or pid < 0:
                 _arrange_str += '\x1b[0m'
         _arrange_str += ']'
+        if self.speed_up_end_timing > self._city.city_timing and batch_id == 0:
+            _arrange_str = '\x1b[1;33;48m%s\x1b[0m' % _arrange_str
         return _arrange_str

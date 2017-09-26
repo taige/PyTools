@@ -378,12 +378,8 @@ class SimCity(Listener, dict):
                     if _needs_ != '':
                         _needs_ += '\n%s' % (' ' * 23)
                     _undone = prod.get_undone_list()
-                    _warehouse_undone = 0  # 如果仓库商品满足需求即显示标识✔︎
-                    for k in prod.needs.material_kinds:
-                        _n = self.warehouse.count(k) - prod.needs.count(k)
-                        if _n < 0:
-                            _warehouse_undone -= _n
-                    _needs_ += '#%d: %s %s 待完成: [\x1b[2;38;46m%s\x1b[0m] %s' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False),
+                    _warehouse_undone = len(prod.needs - self.warehouse)  # 如果仓库商品满足需求即显示标识✔︎
+                    _needs_ += '#%d: %s %s 待完成: [\x1b[0;34;46m%s\x1b[0m] %s' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False),
                                                                                 MaterialList.to_str(_undone, prefix='', suffix=''),
                                                                                 '\x1b[1;35;48m[ ✔︎ ]\x1b[0m' if _warehouse_undone == 0 and not prod.is_for_sell else '')
                 if _done_ != '':
@@ -427,36 +423,44 @@ class SimCity(Listener, dict):
     def has_products_to_start(self) -> dict:
         products_to_start = OrderedDict()
         idle_slots = {}
+        available_slots = {}
         nearest_products = {}
         warehouse_consumed = []
         capacity = self.warehouse.capacity
         for m in sorted(self._waiting, key=functools.cmp_to_key(_manufacture_order)):
             _fact = self.factories if m.is_factory_material else self.get_shop(m.shop_name)
             idle_slots.setdefault(_fact, _fact.idle_slot)
+            available_slots.setdefault(_fact, _fact.available_slot)
             nearest = nearest_products.get(_fact, None)
             _consumed = []
-            if idle_slots[_fact] <= 0 \
+            if available_slots[_fact] <= 0 or idle_slots[_fact] < 0 \
                     or (m.is_factory_material and capacity <= 0) \
                     or (not m.is_factory_material
-                        and not self.warehouse.consume(*m.raw_materials, batch_id=m.batch_id, consumed=_consumed, exact_batch=m.is_for_sell, any_batch=idle_slots[_fact] == _fact.slot)):
+                        and not self.warehouse.consume(*m.raw_materials, batch_id=m.batch_id, consumed=_consumed, exact_batch=m.is_for_sell, any_batch=available_slots[_fact] == _fact.slot)):
                 if nearest is None:
                     nearest_products[_fact] = m
                 if m.latest_product_timing <= self.city_timing:
-                    if idle_slots[_fact] <= 0:
+                    if available_slots[_fact] <= 0 or idle_slots[_fact] < 0:
                         self.cprint('\x1b[1;37;41m产品 [%s] 该开始但是 [%s] 生产槽位不足\x1b[0m', m, _fact['cn_name'])
                     elif m.is_factory_material and capacity <= 0:
                         self.cprint('\x1b[1;37;41m产品 [%s] 该开始生产但是仓库容量不足\x1b[0m', m)
                     elif not m.is_factory_material:
-                        self.cprint('\x1b[1;37;41m产品 [%s] 该开始生产但是原料 %s 不足\x1b[0m', m, m.raw_materials)
+                        self.cprint('\x1b[1;37;41m产品 [%s] 该开始生产但是原料%s不足, 缺少: %s\x1b[0m', m, m.raw_materials, m.raw_materials - _consumed)
                     else:
                         self.cprint('\x1b[1;37;41m产品 [%s] 错过了生产时间\x1b[0m', m)
                 continue
-            if not m.is_factory_material and nearest is not None and idle_slots[_fact] < _fact.slot \
+            if not m.is_factory_material and nearest is not None and available_slots[_fact] < _fact.slot \
                     and 0 <= nearest.latest_product_timing < self.city_timing + m.time_consuming:
                 # 已经在生产，则不排产耗时长于nearest_product既定排产时间的产品??
                 logging.info('优先完成最近物料[%s], 暂不排产[%s]', nearest, m)
                 self.warehouse.extend(_consumed)
             else:
+                if idle_slots[_fact] == 0:
+                    idle_slots[_fact] -= 1
+                    self.warehouse.extend(_consumed)
+                    if m.latest_product_timing <= self.city_timing:
+                        self.cprint('%s \x1b[5;38;48m的产品入库后再安排生产\x1b[0m [%s]', _fact.cn_name, m)
+                    continue
                 capacity_release = 0
                 if not m.is_factory_material:
                     m.raw_consumed = _consumed
@@ -471,6 +475,7 @@ class SimCity(Listener, dict):
                     products_to_start[_fact] = to_start
                 to_start.append(m)
                 idle_slots[_fact] -= 1
+                available_slots[_fact] -= 1
                 m.start_timing = -2  # 标识m可以排产
                 _capacity = capacity
                 capacity = self.products_capacity - self.warehouse.products_len - self.producting_capacity(to_start) + capacity_release

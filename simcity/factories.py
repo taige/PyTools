@@ -84,7 +84,7 @@ class Factories(dict):
         pid, self._factory[i] = self._factory[i], None
         p = self.__producting.pop(abs(pid), None)
         self._idle += 1
-        return p
+        return p if p is not None else abs(pid)
 
     def waiting_delete(self, product: Product):
         if self._waiting_del(product.pid):
@@ -196,6 +196,13 @@ class Factories(dict):
         return self._idle
 
     @property
+    def available_slot(self):
+        n = 0
+        for k in self._factory:
+            n += 1 if k is None or k < 0 else 0
+        return n
+
+    @property
     def is_idle(self):
         n = 0
         for k in self._factory:
@@ -269,19 +276,30 @@ class Factories(dict):
             return None
 
     def move_to_warehouse(self, product: Product, i=-1):
-        if i < 0:
+        if i < 0 or product is None:
             for idx in range(0, self.slot):
                 pid = self._factory[idx]
-                if pid is not None and abs(pid) == product.pid:
-                    i = idx
-                    break
-        if i >= 0:
-            self._factory_del(i)
-            product.in_warehouse = True
-            self._city.cprint('    \x1b[1;38;44m%s 进入仓库\x1b[0m.%d', repr(product), self._city.warehouse.capacity)
+                if pid is None or pid > 0:
+                    continue
+                if product is not None:
+                    if -pid == product.pid:
+                        i = idx
+                        break
+                else:
+                    self._move_fact_to_ware(idx, product)
+        if i >= 0 and product is not None:
+            self._move_fact_to_ware(i, product)
             return True
         else:
-            return False
+            return product is None
+
+    def _move_fact_to_ware(self, slot_idx: int, product: Product):
+        p = self._factory_del(slot_idx)
+        if isinstance(p, int) and product is not None and product.pid == p:
+            p = product
+        if isinstance(p, Product):
+            p.in_warehouse = True
+        self._city.cprint('    \x1b[1;38;44m%s 进入仓库\x1b[0m.%d', repr(p), self._city.warehouse.capacity)
 
     def producting_list(self, include_pending=False):
         _ps = []
@@ -310,7 +328,7 @@ class Factories(dict):
                 else:
                     _fact.append(p)
         if len(_done) > 0:
-            return '%s, \x1b[2;38;46m%s\x1b[0m]' % (MaterialList.to_str(_fact, suffix=''), MaterialList.to_str(_done, prefix='', suffix=''))
+            return '%s, \x1b[0;34;46m%s\x1b[0m]' % (MaterialList.to_str(_fact, suffix=''), MaterialList.to_str(_done, prefix='', suffix=''))
         else:
             return '%s' % _fact
 
@@ -323,12 +341,12 @@ class Factories(dict):
                 _arrange_str += '|'
             p = self._producting(abs(pid), raise_on_nf=False)
             if p is None:
-                _arrange_str += '\x1b[2;38;46m%d\x1b[0m' % (abs(pid) % 1000)
+                _arrange_str += '\x1b[0;34;46m%d\x1b[0m' % (abs(pid) % 1000)
             else:
+                if pid < 0:
+                    _arrange_str += '\x1b[0;34;46m'
                 if p.depth == 0:
                     _arrange_str += '\x1b[4;38;48m'
-                if pid < 0:
-                    _arrange_str += '\x1b[2;38;46m'
                 _arrange_str += '%s' % repr(p)
                 if p.depth == 0 or pid < 0:
                     _arrange_str += '\x1b[0m'

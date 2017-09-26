@@ -144,7 +144,7 @@ class Mayor:
                             if _consume_info != '[':
                                 _consume_info += ', '
                             if isinstance(c, Product) and not c.in_warehouse:
-                                _consume_info += '\x1b[2;38;46m%s\x1b[0m' % repr(c)
+                                _consume_info += '\x1b[0;34;46m%s\x1b[0m' % repr(c)
                             else:
                                 _consume_info += '%s' % repr(c)
                         _consume_info += ']'
@@ -281,13 +281,7 @@ class Mayor:
                 _unconsumed = None
                 if to_consume is not None and len(to_consume) != len(_consumed):
                     # 对未找到的产品进行告警
-                    _unconsumed = ''
-                    for k in to_consume.material_kinds:
-                        _n = to_consume.count(k) - _consumed.count(k)
-                        if _n > 0:
-                            if _unconsumed != '':
-                                _unconsumed += ', '
-                            _unconsumed += '%d*%s' % (_n, k)
+                    _unconsumed = to_consume - _consumed
                 # 未入仓库的产品要先入库
                 for c in _consumed:
                     if isinstance(c, Product) and not c.in_warehouse:
@@ -368,22 +362,24 @@ class Mayor:
                     times = 2
                     duration = 3600
                 rc, _start, _end, _times = shop.set_times_speed_up(times=times, duration=duration)
-                if rc:
-                    self._city.wakeup()
-                else:
+                if not rc:
                     out.write('%s 已经在生产加速x%d, 持续至 %s' % (format_cn(shop.cn_name, 8, left_align=True), _times, fmt_time(_end)))
+                    return
+            elif sub_cmd == 'ware':  # move all to warehouse
+                shop.move_to_warehouse(None)
             elif sub_cmd == 'slot':
                 ext_slot = int(cmd_line.pop(0)) if len(cmd_line) > 0 else 1
                 self._city.shop_setting(shop, ext_slot=ext_slot)
                 self._city.cprint('%s 增加 %d 个生产位，总共生产位: %d', format_cn(shop.cn_name, 8, left_align=True), ext_slot, shop.slot)
-                self._city.wakeup()
             elif sub_cmd in ('star', 'stars'):
                 star = int(cmd_line.pop(0)) if len(cmd_line) > 0 else shop.stars + 1
                 self._city.shop_setting(shop, stars=star)
                 self._city.cprint('%s 星级增加至 %s，生产速度提升 %d%%', format_cn(shop.cn_name, 8, left_align=True), '★' * shop.stars, round((1-shop.stars_speed_up)*100))
-                self._city.wakeup()
             else:
                 self._print_help(out)
+                return
+            self._city.show_city_status(shop)
+            self._city.wakeup()
         else:
             self._shop_detail(shop)
 
@@ -522,15 +518,15 @@ class Mayor:
             out.write('仓库: %d/%d(%d)/(%d)%d%s%s' %
                       (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
                        self._city.warehouse_capacity, '\n%s%s' % (' ' * 15, MaterialList.to_str(_in_ware, prefix='', suffix='')) if len(_in_ware) > 0 else '',
-                       '\n%s\x1b[2;38;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
+                       '\n%s\x1b[0;34;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
 
     _help_message = (
         ('消费库存', 'consume', '2*西瓜 3*面包 | BATCH_ID [= | [-] 1*西瓜 1*面包]'),
         ('看/加库存', 'warehouse', '[show [xig] | 2*西瓜 3*面包 | [+|-]CAPACITY]'),
         ('时间快进', 'forward', '[N]'),
-        ('工厂设置', 'fact', '[slot [1]]'),
-        ('商店设置', 'shop', '[建材店|jcd [slot [1] | speed [2 [3600] | star [1]]]'),
-        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; ware 移入仓库; +/- time_delta 调整完成时间
+        ('工厂设置', 'fact', '[ware | slot [1]]'),
+        ('商店设置', 'shop', '[建材店|jcd [ware | slot [1] | speed [2 [3600] | star [1]]]'),
+        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; delete 删除待产商品及children; ware 移入仓库; +/- time_delta 调整完成时间
         ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} |[+ | -] TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
         ('通知中心', 'nfc', '[on | off]'),
         ('自动入库', 'auto_ware', '[on | off]'),
@@ -619,9 +615,13 @@ class Mayor:
                     ext_slot = int(args.pop(0)) if len(args) > 0 else 1
                     self._city.factories_setting(ext_slot=ext_slot)
                     self._city.cprint('%s 增加 %d 个生产位，总共生产位: %d', format_cn(self._city.factories.cn_name, 8, left_align=True), ext_slot, self._city.factories.slot)
-                    self._city.wakeup()
+                elif sub_cmd == 'ware':  # move all to warehouse
+                    self._city.factories.move_to_warehouse(None)
                 else:
                     self._print_help(out)
+                    return
+                self._city.show_city_status(factories=True)
+                self._city.wakeup()
             else:
                 out.write('%s: %d/%d %s' % (format_cn(self._city.factories.cn_name, 8, left_align=True), self._city.factories.idle_slot, self._city.factories.slot,
                                             self._city.factories.print_arrangement(print_idle=True)))
