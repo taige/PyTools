@@ -20,7 +20,7 @@ class Shop(Factories):
 
     def _product(self, product: Product, force=False):
         '''尝试排产（如果有空闲生产位的话）'''
-        _consumed = MaterialList()
+        _consumed = []
         if not self._city.warehouse.consume(*product.raw_materials, batch_id=product.batch_id, consumed=_consumed,
                                             exact_batch=product.is_for_sell, any_batch=self.available_slot == self.slot, anything=force):
             return '没有足够的原材料: %s, 预期: %s, 实际: %s' % (product.raw_materials, product.raw_consumed, _consumed)
@@ -88,7 +88,7 @@ class Shop(Factories):
                     break  # shop的生产位始终在最前面
                 _arrange_str += '..'
                 continue
-            p = self._producting(abs(pid))
+            p = self._producting(pid)
             if pid < 0:
                 _arrange_str += '\x1b[0;34;46m'
             if p.depth == 0:

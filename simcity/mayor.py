@@ -399,7 +399,7 @@ class Mayor:
             time_delta = str2time(args.pop(0))
         for s_pid in pids:
             pid = int(s_pid)
-            prod = self._city.get_product(pid)
+            prod = self._city.get_product(pid, exact_pid=False)
             if prod is None:
                 out.write('没有找到编号为 %d 的产品' % pid)
                 continue
@@ -522,8 +522,8 @@ class Mayor:
                        '\n%s\x1b[0;34;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
 
     _help_message = (
-        ('消费库存', 'consume', '2*西瓜 3*面包 | BATCH_ID [= | [-] 1*西瓜 1*面包]'),
-        ('看/加库存', 'warehouse', '[show [xig] | 2*西瓜 3*面包 | [+|-]CAPACITY]'),
+        ('消费库存', 'consume', '2*西瓜 3*面包 ... | BATCH_ID [= | [-] 1*西瓜 1*面包 ...]'),
+        ('看/加库存', 'warehouse', '[show [xig] | 2*西瓜 3*面包 ... | [+|-]CAPACITY]'),
         ('时间快进', 'forward', '[N]'),
         ('工厂设置', 'fact', '[ware | slot [1]]'),
         ('商店设置', 'shop', '[建材店|jcd [ware | slot [1] | speed [2 [3600] | star [1]]]'),
@@ -532,10 +532,10 @@ class Mayor:
         ('通知中心', 'nfc', '[on | off]'),
         ('自动入库', 'auto_ware', '[on | off]'),
         ('二次确认', 'confirm', '[N]'),
-        ('查看城市', 'show', '[c(ity) | m(aterial)[s|v|vp|pp] | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
+        ('查看城市', 'show', '[c(ity)\x1b[3;38;48m(default)\x1b[0m | m(aterial)[s|v|vp|pp] [西瓜 | xig ...] | p(roducting)]'),
         ('保存城市', 'dump', '[xxx.json]'),
-        ('从头生产', '++', '2*西瓜 3*面包 [; 1*shab 3*muc]'),
-        ('生产', '+', '[--air | --npc | --ship] 2*西瓜 3*面包 [; 1*shab 3*muc]')
+        ('从头生产', '++', '2*西瓜 3*面包 ... [; 1*shab 3*muc ...]'),
+        ('生产', '+', '[--air | --npc | --ship] [--TIME_DELTA\x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m] 2*西瓜 3*面包 ... [; 1*shab 3*muc ...]')
     )
 
     def _print_help(self, out):
@@ -629,9 +629,9 @@ class Mayor:
         elif cmd.startswith('ware'):  # warehouse
             yield from self._cmd_ware(args)
         elif cmd == 'show':
-            show_what = 'p' if len(args) == 0 else args[0]
+            show_what = 'c' if len(args) == 0 else args.pop(0)
             if show_what.startswith('m'):
-                MaterialDict.show_dict(out, self._city, sort_by_seq=show_what == 'ms', sort_by_value=show_what == 'mv', sort_by_value_pm=show_what == 'mvp', sort_by_profit_pm=show_what == 'mpp')
+                MaterialDict.show_dict(out, self._city, *args, sort_by_seq=show_what == 'ms', sort_by_value=show_what == 'mv', sort_by_value_pm=show_what == 'mvp', sort_by_profit_pm=show_what == 'mpp')
             elif show_what.startswith('c'):
                 self._city.show_city_status(show_all=True, out=out)
             elif show_what == 'p':

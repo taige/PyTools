@@ -141,9 +141,20 @@ class MaterialDict(dict):
         return self._shops_name
 
     @classmethod
-    def show_dict(cls, out, city, sort_by_seq=False, sort_by_value=False, sort_by_value_pm=False, sort_by_profit_pm=False):
+    def show_dict(cls, out, city, *materials, sort_by_seq=False, sort_by_value=False, sort_by_value_pm=False, sort_by_profit_pm=False):
         _dict = cls._MATERIALS
+        show_list = []
+        for m in materials:
+            if not MaterialDict.has(m):
+                _m = MaterialDict.get_by_en_name(m)
+                if _m is None:
+                    continue
+                else:
+                    m = _m.cn_name
+            show_list.append(m)
         for name in sorted(_dict, key=lambda n: _dict[n].seq if sort_by_seq else _dict[n].max_value if sort_by_value else _dict[n].max_value_pm if sort_by_value_pm else _dict[n].profit_pm if sort_by_profit_pm else '%s%s%s' % ((0, _dict[n].en_name, '') if _dict[n].is_factory_material else (1, _dict[n].en_name, _dict[n].shop_name))):
+            if len(show_list) > 0 and name not in show_list:
+                continue
             m = _dict[name]
             _str = format_cn('%s(%s)' % (m.cn_name, m.en_name), 16, left_align=True)
             if not m.is_factory_material:
@@ -621,7 +632,7 @@ class Product(Material):
     @property
     def time_to_done(self):
         if self.start_timing >= 0:
-            return max(self.time_consuming - (self._city.city_timing - self.start_timing), 0)
+            _time_to_done = max(self.time_consuming - (self._city.city_timing - self.start_timing), 0)
         elif self.start_timing == -1 and not self.is_factory_material:
             _time_to_done = 0
             _shop = self._city.get_shop(self.shop_name)
@@ -631,9 +642,10 @@ class Product(Material):
                     break
                 _time_to_done = p.time_to_done
             _time_to_done += self.time_consuming
-            return _time_to_done
         else:
-            return self.time_consuming
+            _time_to_done = self.time_consuming
+        self['_time_to_done'] = fmt_time(_time_to_done)
+        return _time_to_done
 
     @property
     def is_factory_material(self):
@@ -665,17 +677,24 @@ class Product(Material):
         if 'products' in self and (self.consumed or ('_products_timestamp' in self and (time.time() - self['_products_timestamp']) < 0.1 and not self._city.warehouse.changed)):
             return self['products']
         self['products'] = MaterialList()
+        self._collect_products(done_products=self['products'])
+        self['_products_timestamp'] = time.time()
+        return self['products']
+
+    def _collect_products(self, done_products=None, do_normalize_on_done=False):
         _products = []
         self._city.warehouse.consume(batch_id=self.batch_id, just_peek=True, consumed=_products)
         _products.sort(key=lambda _p: _p.batch_id)
         for i in range(len(_products)):
             p = _products[i]
             if p.batch_id < 0:
-                self['products'].append(p._id_str_)
+                if done_products is not None:
+                    done_products.append(p._id_str_)
             else:
-                break
-        self['_products_timestamp'] = time.time()
-        return self['products']
+                if do_normalize_on_done:
+                    p.batch_id = 0
+                else:
+                    break
 
     @property
     def needs(self):
@@ -780,6 +799,7 @@ class Product(Material):
         if self.depth < 0:
             if (self.is_for_sell and len(self.children) == 0) or len(self.root.get_undone_list()) == 0:
                 self['product_done'] = True
+                self._collect_products(done_products=None, do_normalize_on_done=True)
                 return True
         return False
 

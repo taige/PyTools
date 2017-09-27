@@ -57,11 +57,12 @@ class Factories(dict):
         return "%s#%d" % (self.cn_name, self.slot)
 
     def _producting(self, pid, raise_on_nf=True):
+        pid, _pid = abs(pid), pid
         if pid in self.__producting:
             return self.__producting[pid]
         p = self._city.get_product(pid)
         if p is None and raise_on_nf:
-            raise Exception("没有找到 %d 的生产" % pid)
+            raise Exception("没有找到 %d 的生产" % _pid)
         if p is not None:
             self.__producting[pid] = p
         return p
@@ -321,7 +322,7 @@ class Factories(dict):
         for pid in self._factory:
             if pid is None:
                 continue
-            p = self._producting(abs(pid))
+            p = self._producting(pid)
             if batch_id == 0 or p.batch_id == batch_id:
                 if pid < 0:
                     _done.append(p)
@@ -334,12 +335,12 @@ class Factories(dict):
 
     def _compose_factory_arrange_detail(self):
         _arrange_str = '['
-        for pid in sorted(self._factory, key=lambda _pid: 0 if _pid is None else self._producting(abs(_pid)).latest_product_timing):
+        for pid in sorted(self._factory, key=lambda _pid: 0 if _pid is None else self._producting(_pid).latest_product_timing):
             if pid is None:
                 continue
             if _arrange_str != '[':
                 _arrange_str += '|'
-            p = self._producting(abs(pid), raise_on_nf=False)
+            p = self._producting(pid, raise_on_nf=False)
             if p is None:
                 _arrange_str += '\x1b[0;34;46m%d\x1b[0m' % (abs(pid) % 1000)
             else:

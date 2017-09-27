@@ -77,19 +77,6 @@ class SimCity(Listener, dict):
         MaterialDict.init_all_product_time_consuming(_to_product)
         Product.PID = 0
 
-        warehouse = Warehouse(self)
-        if '_warehouse' in self:
-            for p in self['_warehouse']:
-                if isinstance(p, dict):
-                    if not MaterialDict.has(p['cn_name']):
-                        raise Exception("仓库中有未定义的物料： %s" % p['cn_name'])
-                    warehouse.append(Product(material=MaterialDict.get(p['cn_name']), city=self, **p))
-                else:
-                    if not MaterialDict.has(p):
-                        raise Exception("仓库中有未定义的物料： %s" % p)
-                    warehouse.append(p)
-        self['_warehouse'] = warehouse
-
         if '_producting_list' in self:
             for i in range(len(self._producting_batch)):
                 d_p = self._producting_batch[i]
@@ -97,6 +84,24 @@ class SimCity(Listener, dict):
                 self._producting_batch[i] = p
         else:
             self['_producting_list'] = []
+
+        warehouse = Warehouse(self)
+        if '_warehouse' in self:
+            for p in self['_warehouse']:
+                if isinstance(p, dict):
+                    if not MaterialDict.has(p['cn_name']):
+                        raise Exception("仓库中有未定义的物料： %s" % p['cn_name'])
+                    if 'p_pid' not in p:
+                        raise Exception("仓库中的物料 %s 没有pid" % p)
+                    prod = self.get_product(p['p_pid'], include_warehouse=False)
+                    if prod is None:
+                        prod = Product(material=MaterialDict.get(p['cn_name']), city=self, **p)
+                    warehouse.append(prod)
+                else:
+                    if not MaterialDict.has(p):
+                        raise Exception("仓库中有未定义的物料： %s" % p)
+                    warehouse.append(p)
+        self['_warehouse'] = warehouse
 
         Listener.__init__(self, ('0.0.0.0', self._listen_port), 'simcity', loop=loop)
         self.load_acl(self)
@@ -313,15 +318,17 @@ class SimCity(Listener, dict):
         b = self.get_batch(batch_id)
         return b.is_done() if b is not None else True
 
-    def get_product(self, pid) -> Product:
+    def get_product(self, pid, include_warehouse=True, exact_pid=True) -> Product:
         for p in self._producting_batch:
-            if p.pid == pid or (p.pid % 1000) == pid:
+            if p.pid == pid or (not exact_pid and (p.pid % 1000) == pid):
                 return p
             c = p.get_child(pid)
             if c is not None:
                 return c
+        if not include_warehouse:
+            return None
         for w in self.warehouse:
-            if isinstance(w, Product) and (w.pid == pid or (w.pid % 1000) == pid):
+            if isinstance(w, Product) and (w.pid == pid or (not exact_pid and (w.pid % 1000) == pid)):
                 return w
         return None
 
