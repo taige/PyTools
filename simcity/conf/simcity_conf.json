@@ -66,6 +66,7 @@
       "class": "jins",
       "cn_name": "金属",
       "factory": true,
+      "max_value": 10,
       "seq": "Metal",
       "time_consuming": 1
     },
@@ -73,6 +74,7 @@
       "class": "muc",
       "cn_name": "木材",
       "factory": true,
+      "max_value": 20,
       "seq": "Wood",
       "time_consuming": 3
     },
@@ -80,6 +82,7 @@
       "class": "sul",
       "cn_name": "塑料",
       "factory": true,
+      "max_value": 25,
       "seq": "Plastic",
       "time_consuming": 9
     },
@@ -87,6 +90,7 @@
       "class": "zhz",
       "cn_name": "种子",
       "factory": true,
+      "max_value": 30,
       "seq": "Seeds",
       "time_consuming": 20
     },
@@ -94,6 +98,7 @@
       "class": "ks",
       "cn_name": "矿石",
       "factory": true,
+      "max_value": 40,
       "seq": "Minerals",
       "time_consuming": 30
     },
@@ -101,6 +106,7 @@
       "class": "huax",
       "cn_name": "化学",
       "factory": true,
+      "max_value": 60,
       "seq": "Chemicals",
       "time_consuming": 120
     },
@@ -108,6 +114,7 @@
       "class": "bul",
       "cn_name": "布料",
       "factory": true,
+      "max_value": 90,
       "seq": "Textiles",
       "time_consuming": 180
     },
@@ -115,6 +122,7 @@
       "class": "t",
       "cn_name": "糖",
       "factory": true,
+      "max_value": 110,
       "seq": "Sugar and Spices",
       "time_consuming": 240
     },
@@ -122,6 +130,7 @@
       "class": "bol",
       "cn_name": "玻璃",
       "factory": true,
+      "max_value": 120,
       "seq": "Glass",
       "time_consuming": 300
     },
@@ -129,6 +138,7 @@
       "class": "sil",
       "cn_name": "饲料",
       "factory": true,
+      "max_value": 140,
       "seq": "Animal Feed",
       "time_consuming": 360
     },
@@ -136,12 +146,14 @@
       "class": "xp",
       "cn_name": "芯片",
       "factory": true,
+      "max_value": 160,
       "seq": "Electrical Components",
       "time_consuming": 420
     },
     {
       "class": "dz",
       "cn_name": "钉子",
+      "max_value": 80,
       "raw_materials": [
         {
           "count": 2,
@@ -155,6 +167,7 @@
     {
       "class": "mub",
       "cn_name": "木板",
+      "max_value": 120,
       "raw_materials": [
         {
           "count": 2,
@@ -168,6 +181,7 @@
     {
       "class": "zhk",
       "cn_name": "砖块",
+      "max_value": 190,
       "raw_materials": [
         {
           "count": 2,
@@ -181,6 +195,7 @@
     {
       "class": "shn",
       "cn_name": "水泥",
+      "max_value": 440,
       "raw_materials": [
         {
           "count": 2,
@@ -198,6 +213,7 @@
     {
       "class": "js",
       "cn_name": "胶水",
+      "max_value": 440,
       "raw_materials": [
         {
           "count": 1,
@@ -215,6 +231,7 @@
     {
       "class": "yq",
       "cn_name": "油漆",
+      "max_value": 320,
       "raw_materials": [
         {
           "count": 2,
@@ -236,6 +253,7 @@
     {
       "class": "chuiz",
       "cn_name": "锤子",
+      "max_value": 90,
       "raw_materials": [
         {
           "count": 1,
@@ -253,6 +271,7 @@
     {
       "class": "chiz",
       "cn_name": "尺子",
+      "max_value": 110,
       "raw_materials": [
         {
           "count": 1,
@@ -270,6 +289,7 @@
     {
       "class": "chanz",
       "cn_name": "铲子",
+      "max_value": 150,
       "raw_materials": [
         {
           "count": 1,
@@ -291,6 +311,7 @@
     {
       "class": "chuj",
       "cn_name": "厨具",
+      "max_value": 250,
       "raw_materials": [
         {
           "count": 2,
@@ -312,6 +333,7 @@
     {
       "class": "tiz",
       "cn_name": "梯子",
+      "max_value": 420,
       "raw_materials": [
         {
           "count": 2,
@@ -329,6 +351,7 @@
     {
       "class": "dzh",
       "cn_name": "电钻",
+      "max_value": 590,
       "raw_materials": [
         {
           "count": 2,
@@ -350,6 +373,7 @@
     {
       "class": "suc",
       "cn_name": "蔬菜",
+      "max_value": 160,
       "raw_materials": [
         {
           "count": 2,
@@ -363,6 +387,7 @@
     {
       "class": "mf",
       "cn_name": "面粉",
+      "max_value": 570,
       "raw_materials": [
         {
           "count": 2,
@@ -380,6 +405,7 @@
     {
       "class": "xig",
       "cn_name": "西瓜",
+      "max_value": 730,
       "raw_materials": [
         {
           "count": 1,
@@ -397,6 +423,7 @@
     {
       "class": "naiy",
       "cn_name": "奶油",
+      "max_value": 440,
       "raw_materials": [
         {
           "count": 1,
@@ -410,6 +437,7 @@
     {
       "class": "yum",
       "cn_name": "玉米",
+      "max_value": 280,
       "raw_materials": [
         {
           "count": 1,
@@ -427,6 +455,7 @@
     {
       "class": "nail",
       "cn_name": "奶酪",
+      "max_value": 660,
       "raw_materials": [
         {
           "count": 2,
@@ -440,6 +469,7 @@
     {
       "class": "niur",
       "cn_name": "牛肉",
+      "max_value": 860,
       "raw_materials": [
         {
           "count": 3,
@@ -453,6 +483,7 @@
     {
       "class": "yiz",
       "cn_name": "椅子",
+      "max_value": 300,
       "raw_materials": [
         {
           "count": 1,
@@ -474,6 +505,7 @@
     {
       "class": "zhuoz",
       "cn_name": "桌子",
+      "max_value": 500,
       "raw_materials": [
         {
           "count": 1,
@@ -495,6 +527,7 @@
     {
       "class": "beiz",
       "cn_name": "被子",
+      "max_value": 610,
       "raw_materials": [
         {
           "count": 1,
@@ -512,6 +545,7 @@
     {
       "class": "chug",
       "cn_name": "橱柜",
+      "max_value": 900,
       "raw_materials": [
         {
           "count": 2,
@@ -533,6 +567,7 @@
     {
       "class": "sf",
       "cn_name": "沙发",
+      "max_value": 1810,
       "raw_materials": [
         {
           "count": 3,
@@ -554,6 +589,7 @@
     {
       "class": "c",
       "cn_name": "草",
+      "max_value": 310,
       "raw_materials": [
         {
           "count": 1,
@@ -571,6 +607,7 @@
     {
       "class": "sm",
       "cn_name": "树苗",
+      "max_value": 420,
       "raw_materials": [
         {
           "count": 1,
@@ -588,6 +625,7 @@
     {
       "class": "tyjj",
       "cn_name": "庭院家具",
+      "max_value": 820,
       "raw_materials": [
         {
           "count": 2,
@@ -609,6 +647,7 @@
     {
       "class": "huok",
       "cn_name": "火坑",
+      "max_value": 1740,
       "raw_materials": [
         {
           "count": 2,
@@ -630,6 +669,7 @@
     {
       "class": "gcj",
       "cn_name": "割草机",
+      "max_value": 840,
       "raw_materials": [
         {
           "count": 3,
@@ -651,6 +691,7 @@
     {
       "class": "dj",
       "cn_name": "地精",
+      "max_value": 1600,
       "raw_materials": [
         {
           "count": 2,
@@ -668,6 +709,7 @@
     {
       "class": "ttq",
       "cn_name": "甜甜圈",
+      "max_value": 950,
       "raw_materials": [
         {
           "count": 1,
@@ -685,6 +727,7 @@
     {
       "class": "shab",
       "cn_name": "沙冰",
+      "max_value": 1150,
       "raw_materials": [
         {
           "count": 1,
@@ -702,6 +745,7 @@
     {
       "class": "mb",
       "cn_name": "面包",
+      "max_value": 1840,
       "raw_materials": [
         {
           "count": 2,
@@ -719,6 +763,7 @@
     {
       "class": "dang",
       "cn_name": "蛋糕",
+      "max_value": 2240,
       "raw_materials": [
         {
           "count": 1,
@@ -740,6 +785,7 @@
     {
       "class": "dsn",
       "cn_name": "冻酸奶",
+      "max_value": 1750,
       "raw_materials": [
         {
           "count": 1,
@@ -761,6 +807,7 @@
     {
       "class": "kf",
       "cn_name": "咖啡",
+      "max_value": 750,
       "raw_materials": [
         {
           "count": 2,
@@ -782,6 +829,7 @@
     {
       "class": "maoz",
       "cn_name": "帽子",
+      "max_value": 600,
       "raw_materials": [
         {
           "count": 2,
@@ -799,6 +847,7 @@
     {
       "class": "xiez",
       "cn_name": "鞋子",
+      "max_value": 980,
       "raw_materials": [
         {
           "count": 2,
@@ -820,6 +869,7 @@
     {
       "class": "sb",
       "cn_name": "手表",
+      "max_value": 580,
       "raw_materials": [
         {
           "count": 2,
@@ -841,6 +891,7 @@
     {
       "class": "xz",
       "cn_name": "西装",
+      "max_value": 1170,
       "raw_materials": [
         {
           "count": 3,
@@ -862,6 +913,7 @@
     {
       "class": "bb",
       "cn_name": "背包",
+      "max_value": 430,
       "raw_materials": [
         {
           "count": 2,
@@ -883,6 +935,7 @@
     {
       "class": "smz",
       "cn_name": "三明治",
+      "max_value": 2560,
       "raw_materials": [
         {
           "count": 1,
@@ -900,6 +953,7 @@
     {
       "class": "pis",
       "cn_name": "披萨",
+      "max_value": 2560,
       "raw_materials": [
         {
           "count": 1,
@@ -921,6 +975,7 @@
     {
       "class": "hb",
       "cn_name": "汉堡",
+      "max_value": 3620,
       "raw_materials": [
         {
           "count": 1,
@@ -942,6 +997,7 @@
     {
       "class": "st",
       "cn_name": "薯条",
+      "max_value": 1050,
       "raw_materials": [
         {
           "count": 1,
@@ -959,6 +1015,7 @@
     {
       "class": "nms",
       "cn_name": "柠檬水",
+      "max_value": 1690,
       "raw_materials": [
         {
           "count": 2,
@@ -980,6 +1037,7 @@
     {
       "class": "bmh",
       "cn_name": "爆米花",
+      "max_value": 1250,
       "raw_materials": [
         {
           "count": 2,
@@ -997,6 +1055,7 @@
     {
       "class": "bbq",
       "cn_name": "BBQ",
+      "max_value": 530,
       "raw_materials": [
         {
           "count": 3,
@@ -1014,6 +1073,7 @@
     {
       "class": "bx",
       "cn_name": "冰箱",
+      "max_value": 1060,
       "raw_materials": [
         {
           "count": 2,
@@ -1035,6 +1095,7 @@
     {
       "class": "dd",
       "cn_name": "电灯",
+      "max_value": 890,
       "raw_materials": [
         {
           "count": 1,
@@ -1056,6 +1117,7 @@
     {
       "class": "tv",
       "cn_name": "电视",
+      "max_value": 1280,
       "raw_materials": [
         {
           "count": 2,
@@ -1077,6 +1139,7 @@
     {
       "class": "wbl",
       "cn_name": "微波炉",
+      "max_value": 480,
       "raw_materials": [
         {
           "count": 4,

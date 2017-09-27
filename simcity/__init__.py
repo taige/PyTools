@@ -141,9 +141,9 @@ class MaterialDict(dict):
         return self._shops_name
 
     @classmethod
-    def show_dict(cls, out, city, sort_by_seq=False):
+    def show_dict(cls, out, city, sort_by_seq=False, sort_by_value=False, sort_by_value_pm=False, sort_by_profit_pm=False):
         _dict = cls._MATERIALS
-        for name in sorted(_dict, key=lambda n: _dict[n].seq if sort_by_seq else '%s%s%s' % ((0, _dict[n].en_name, '') if _dict[n].is_factory_material else (1, _dict[n].en_name, _dict[n].shop_name))):
+        for name in sorted(_dict, key=lambda n: _dict[n].seq if sort_by_seq else _dict[n].max_value if sort_by_value else _dict[n].max_value_pm if sort_by_value_pm else _dict[n].profit_pm if sort_by_profit_pm else '%s%s%s' % ((0, _dict[n].en_name, '') if _dict[n].is_factory_material else (1, _dict[n].en_name, _dict[n].shop_name))):
             m = _dict[name]
             _str = format_cn('%s(%s)' % (m.cn_name, m.en_name), 16, left_align=True)
             if not m.is_factory_material:
@@ -152,6 +152,7 @@ class MaterialDict(dict):
                 _factory = city.factories
             _str += '耗时: %s' % fmt_time(_factory.stars_speed_up * m.time_consuming, always_show_hour=True)
             _str += '/%s   ' % fmt_time(m.all_product_time_consuming, always_show_hour=True)
+            _str += '$%4d/%2.0f/%2.0f   ' % (m.max_value, m.max_value_pm, m.profit_pm)
             if not m.is_factory_material:
                 _str += '商店: %s 原材料: %s' % (format_cn(m.shop_name + '★' * _factory.stars, 12, left_align=True), m.raw_materials)
             out.write(_str)
@@ -219,6 +220,22 @@ class Material(dict):
     @property
     def shop_name(self):
         return self['shop'] if 'shop' in self else None
+
+    @property
+    def max_value(self):
+        return self.get('max_value', 0)
+
+    @property
+    def profit(self):
+        return self.max_value - (0 if self._raw_materials is None else self._raw_materials.max_values)
+
+    @property
+    def profit_pm(self):
+        return self.profit / (self.time_consuming / 60)
+
+    @property
+    def max_value_pm(self):
+        return self.max_value / (self.all_product_time_consuming / 60)
 
     @property
     def seq(self):
@@ -414,6 +431,19 @@ class MaterialList(list):
                 t = key.time_consuming
         return t
 
+    @property
+    def max_values(self):
+        v = 0
+        for m in self:
+            if isinstance(m, str):
+                if m.find('#') > 0:
+                    m = m.split('#')[1]
+                m = MaterialDict.get(m)
+            if m is None or not isinstance(m, Material):
+                continue
+            v += m.max_value
+        return v
+
 
 class Product(Material):
     '''
@@ -534,6 +564,10 @@ class Product(Material):
     @property
     def seq(self):
         return self._material.seq if self._material is not None else ''
+
+    @property
+    def max_value(self):
+        return self._material.max_value if self._material is not None else 0
 
     @property
     def notified(self):

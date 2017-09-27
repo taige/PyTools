@@ -170,11 +170,12 @@ class Mayor:
             self._city.show_city_status(show_all=True)
 
     @asyncio.coroutine
-    def _confirm_materials(self, material_list, action):
+    def _confirm_materials(self, material_list, action, show_value=False):
         self._waiting_ui = True
         try:
             while True:
-                self._connection.write('即将%s %s, 确认(Y/N)?' % (action, MaterialList.to_str(material_list, sort_by_count=False)), end='', print_prompt=False)
+                self._connection.write('即将%s %s%s, 确认(Y/N)?' %
+                                       (action, MaterialList.to_str(material_list, sort_by_count=False), ('($%d)' % material_list.max_values) if show_value else ''), end='', print_prompt=False)
                 confirm = yield from self._ui_queue.get()
                 if confirm is None:
                     return False
@@ -531,7 +532,7 @@ class Mayor:
         ('通知中心', 'nfc', '[on | off]'),
         ('自动入库', 'auto_ware', '[on | off]'),
         ('二次确认', 'confirm', '[N]'),
-        ('查看城市', 'show', '[c(ity) | m(aterial) | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
+        ('查看城市', 'show', '[c(ity) | m(aterial)[s|v|vp|pp] | p(roducting)\x1b[3;38;48m(default)\x1b[0m]'),
         ('保存城市', 'dump', '[xxx.json]'),
         ('从头生产', '++', '2*西瓜 3*面包 [; 1*shab 3*muc]'),
         ('生产', '+', '[--air | --npc | --ship] 2*西瓜 3*面包 [; 1*shab 3*muc]')
@@ -630,7 +631,7 @@ class Mayor:
         elif cmd == 'show':
             show_what = 'p' if len(args) == 0 else args[0]
             if show_what.startswith('m'):
-                MaterialDict.show_dict(out, self._city, sort_by_seq=show_what == 'ms')
+                MaterialDict.show_dict(out, self._city, sort_by_seq=show_what == 'ms', sort_by_value=show_what == 'mv', sort_by_value_pm=show_what == 'mvp', sort_by_profit_pm=show_what == 'mpp')
             elif show_what.startswith('c'):
                 self._city.show_city_status(show_all=True, out=out)
             elif show_what == 'p':
@@ -666,7 +667,7 @@ class Mayor:
                     continue
                 elif len(material_list) == 0:
                     continue
-                elif not (yield from self._confirm_materials(material_list, '排产')):
+                elif not (yield from self._confirm_materials(material_list, '排产', show_value=True)):
                     continue
                 # backup whole city, for recover if wrong product arrangement
                 self._city.dump(file='city_backup/simcity_%s-%d.json' % (self._city.city_nick_name, self._city.product_batch_no))
