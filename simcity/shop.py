@@ -11,6 +11,9 @@ class Shop(Factories):
     def seq(self):
         return self.get('seq', 0)
 
+    def factory_get(self, i: int) -> Product:
+        return super()._factory_get(i)
+
     def is_busying(self):
         w = self._factory_get(0)
         return w is not None and w.start_timing >= 0

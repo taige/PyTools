@@ -635,7 +635,7 @@ class Mayor:
             elif show_what.startswith('c'):
                 self._city.show_city_status(show_all=True, out=out)
             elif show_what == 'p':
-                ps = self._city.get_producting_list()
+                ps = self._city.get_producting_list(include_pending=True)
                 for p in ps:
                     fact_name = self._city.factories.cn_name if p.is_factory_material else self._city.get_shop(p.shop_name).cn_name
                     out.write('%s将在 \x1b[1;37;40m%s\x1b[0m 后完成 \x1b[3;38;48m%s\x1b[0m' % (format_cn(fact_name, 11), fmt_time(p.time_to_done), repr(p)))

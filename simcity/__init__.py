@@ -539,8 +539,19 @@ class Product(Material):
                 return c
         return None
 
+    def _get_undone(self, children, undone_list):
+        for c in children:
+            self._get_undone(c.children, undone_list)
+            if c.depth == 0 and not c.is_done():
+                undone_list.append(c)
+
     def get_undone_list(self):
-        return self.needs - self.products
+        if self.is_for_sell:
+            undone_list = MaterialList()
+            self._get_undone(self.children, undone_list)
+            return undone_list
+        else:
+            return self.needs - self.products
 
     def find_child(self, name, ret_prods: list):
         for child in self.children:
@@ -611,6 +622,16 @@ class Product(Material):
     def time_to_done(self):
         if self.start_timing >= 0:
             return max(self.time_consuming - (self._city.city_timing - self.start_timing), 0)
+        elif self.start_timing == -1 and not self.is_factory_material:
+            _time_to_done = 0
+            _shop = self._city.get_shop(self.shop_name)
+            for i in range(_shop.slot):
+                p = _shop.factory_get(i)
+                if p is None or p.is_done() or p.pid == self.pid:
+                    break
+                _time_to_done = p.time_to_done
+            _time_to_done += self.time_consuming
+            return _time_to_done
         else:
             return self.time_consuming
 
