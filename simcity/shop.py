@@ -11,6 +11,18 @@ class Shop(Factories):
     def seq(self):
         return self.get('seq', 0)
 
+    @property
+    def pending_timing(self):
+        timing = 0
+        for i in sorted(range(self.slot), reverse=True):
+            p = self.factory_get(i)
+            if p is None or p.is_done():
+                continue
+            timing = p.time_to_done
+            break
+        logging.debug('%s.pending_timing=%s', self.cn_name, fmt_time(timing))
+        return timing
+
     def factory_get(self, i: int) -> Product:
         return super()._factory_get(i)
 

@@ -111,6 +111,78 @@ def format_cn(cn, width=1, left_align=False, right_align=False):
     return '{0:>{wd}}'.format(cn, wd=width) if right_align else '{0:<{wd}}'.format(cn, wd=width) if left_align else '{0:^{wd}}'.format(cn, wd=width)
 
 
+class _Schedule(list):
+
+    def __init__(self, product, start, end):
+        super().__init__([start, end, product, start])
+
+    @property
+    def start(self):
+        return self[0]
+
+    @property
+    def end(self):
+        return self[1]
+
+    @property
+    def product(self):
+        return self[2]
+
+    @property
+    def latest_start(self):
+        return self[3]
+
+    @latest_start.setter
+    def latest_start(self, t):
+        self[3] = t
+
+
+class ScheduleTable:
+
+    def __init__(self, city_timing, pending_timing=0):
+        self._city_timing = city_timing
+        self._pending_timing = pending_timing
+        self._schedule = []
+
+    def schedule_earliest(self, expect_start=None, duration=None, product=None):
+        if product is not None and isinstance(product, Product):
+            expect_start = product.waiting_time
+            duration = product.time_consuming
+        if isinstance(expect_start, str):
+            expect_start = str2time(expect_start)
+        if isinstance(duration, str):
+            duration = str2time(duration)
+        start = self._city_timing + max(self._pending_timing, expect_start)
+        for _sch in self._schedule:
+            if _sch.end < start:
+                continue
+            if start + duration < _sch.start:
+                break
+            start = _sch.end
+        self._schedule.append(_Schedule(product, start, start + duration))
+        self._schedule.sort(key=lambda _s: _s.start)
+        if product is not None and isinstance(product, Product):
+            product.earliest_product_timing = start
+            product.all_product_time_consuming = start + product.time_consuming - self._city_timing
+        return start
+
+    def schedule_latest(self, product, latest):
+        latest_end = latest
+        for _sch in sorted(self._schedule, key=lambda _s: _s.latest_start, reverse=True):
+            if _sch.product.pid == product.pid:
+                if _sch.latest_start + product.time_consuming < latest_end:
+                    _sch.latest_start = latest_end - product.time_consuming
+                product.latest_product_timing = _sch.latest_start
+                if _sch.start < _sch.latest_start:
+                    logging.debug('%s %s-%s => %s-%s', product, fmt_time(_sch.start), fmt_time(_sch.start), fmt_time(_sch.latest_start), fmt_time(_sch.latest_start + product.time_consuming))
+                break
+            latest_end = _sch.latest_start
+
+    def log(self):
+        for _sch in self._schedule:
+            logging.debug('%s(%s-%s)', _sch.product, fmt_time(_sch.start), fmt_time(_sch.end))
+
+
 class MaterialDict(dict):
     _MATERIALS = None
 
@@ -190,7 +262,7 @@ class MaterialDict(dict):
         for m in cls._MATERIALS.values():
             if not m.is_factory_material:
                 p = to_product(m)
-                m['all_product_time_consuming'] = p.all_product_time_consuming
+                m.all_product_time_consuming = p.all_product_time_consuming
 
 
 class Material(dict):
@@ -223,6 +295,10 @@ class Material(dict):
     @property
     def all_product_time_consuming(self):
         return self['all_product_time_consuming'] if 'all_product_time_consuming' in self else self.time_consuming
+
+    @all_product_time_consuming.setter
+    def all_product_time_consuming(self, t):
+        self['all_product_time_consuming'] = t
 
     @property
     def is_factory_material(self):
@@ -868,20 +944,19 @@ class Product(Material):
 
     @property
     def all_product_time_consuming(self):
-        if 'all_product_time_consuming' in self and self['all_product_time_consuming'] >= 0 and not self.children_changed:
+        if 'all_product_time_consuming' in self and self['all_product_time_consuming'] >= 0:
             return self['all_product_time_consuming']
         if self._parent is None:
             t = 0
         else:
             t = self.time_consuming
-        max_t = 0
         if not self.is_factory_material:
-            for child in self.children:
-                if max_t < child.all_product_time_consuming:
-                    max_t = child.all_product_time_consuming
-        self['all_product_time_consuming'] = max_t + t
-        self._children_changed = False
-        return self['all_product_time_consuming']
+            t += max(self.children, key=lambda c: c.all_product_time_consuming).all_product_time_consuming
+        return t
+
+    @all_product_time_consuming.setter
+    def all_product_time_consuming(self, t):
+        self['all_product_time_consuming'] = t
 
     @property
     def waiting_time(self):
@@ -889,13 +964,23 @@ class Product(Material):
 
     @property
     def latest_product_timing(self):
-        if self._parent is None:
-            self['latest_product_timing'] = self.all_product_time_consuming
-        elif self.parent.parent is None:
-            self['latest_product_timing'] = max(0, self.arrange_timing + self._parent.latest_product_timing - self.time_consuming)
-        else:
-            self['latest_product_timing'] = max(0, self._parent.latest_product_timing - self.time_consuming)
-        return self['latest_product_timing']
+        if self.depth < 0:
+            return self.all_product_time_consuming
+        return self.get('latest_product_timing', self.waiting_time)
+
+    @latest_product_timing.setter
+    def latest_product_timing(self, t):
+        self['latest_product_timing'] = t
+
+    @property
+    def earliest_product_timing(self):
+        if self.depth < 0:
+            return 0
+        return self.get('earliest_product_timing', self.waiting_time)
+
+    @earliest_product_timing.setter
+    def earliest_product_timing(self, t):
+        self['earliest_product_timing'] = t
 
 
 def manufacture_order(p1: Product, p2: Product):
@@ -995,4 +1080,28 @@ if __name__ == '__main__':
     assert 1 == str2time('1s')
     assert 1 == str2time('m1')
     assert 1 == str2time('m1s')
+
+    def _zero_timing():
+        from datetime import datetime
+        n = datetime.now()
+        z = datetime(n.year, n.month, n.day)
+        return z.timestamp()
+
+    s = ScheduleTable(round(time.time() - _zero_timing()))
+    s.schedule_earliest('6h', '2h15m', '牛肉1')
+    s.schedule_earliest('3h', '27m', '面粉1')
+    s.schedule_earliest('6h', '1h34m', '奶酪1')
+    s.schedule_earliest('3h', '27m', '面粉2')
+    s.schedule_earliest('6h', '1h34m', '奶酪2')
+    s.schedule_earliest('6h', '2h15m', '牛肉2')
+    # s.schedule_earliest('20m', '18m', '蔬菜')
+    # s.schedule_earliest('20m', '18m', '蔬菜2')
+    # s.schedule_earliest('20m', '18m', '蔬菜2')
+    # s.schedule_earliest('3h', '27m', '面粉3')
+    # s.schedule_earliest('3h', '27m', '面粉4')
+    s.schedule_earliest('20m', '18m', '蔬菜1')
+    s.schedule_earliest('1h57m', '1h21m', '西瓜1')
+    s.schedule_earliest('20m', '18m', '蔬菜2')
+    s.schedule_earliest('1h57m', '1h21m', '西瓜2')
+    s.log()
 

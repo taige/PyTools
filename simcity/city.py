@@ -64,7 +64,7 @@ class SimCity(Listener, dict):
         self.shops.sort(key=lambda _s: _s.seq)
 
         def _to_product(material):
-            return self.compose_product_chain(0, [material.cn_name], warehouse_will_used=None, prod_type=Product.PT_SELL, expect_done_time=0)
+            return self.compose_product_chain(0, [material.cn_name], warehouse_will_used=None, prod_type=Product.PT_SELL, expect_done_time=0, initial=True)
 
         MaterialDict.init_all_product_time_consuming(_to_product)
         Product.PID = 0
@@ -131,7 +131,7 @@ class SimCity(Listener, dict):
     def _waiting(self):
         _waiting_list = []
         for p in self._producting_batch:
-            self.collect_waiting(p.children, _waiting_list)
+            self.batch_to_list(p.children, _waiting_list)
         return _waiting_list
 
     @property
@@ -324,11 +324,14 @@ class SimCity(Listener, dict):
                 return w
         return None
 
-    def collect_waiting(self, chain, waiting_list):
+    def batch_to_list(self, chain, waiting_list=None):
+        if waiting_list is None:
+            waiting_list = []
         for c in chain:
-            self.collect_waiting(c.children, waiting_list)
+            self.batch_to_list(c.children, waiting_list)
             if c.start_timing < -1 and not c.is_done():
                 waiting_list.append(c)
+        return waiting_list
 
     def get_producting_list(self, sort_by_done=True, include_pending=False):
         ps = self.factories.producting_list(include_pending=include_pending)
@@ -713,10 +716,10 @@ class SimCity(Listener, dict):
 
         return product_chain
 
-    def compose_product_chain(self, batch_id, material_list, warehouse_will_used, prod_type=Product.PT_BUILDING, expect_done_time=0):
+    def compose_product_chain(self, batch_id, material_list, warehouse_will_used, prod_type=Product.PT_BUILDING, expect_done_time=0, initial=False):
         product_chain = Product(batch_id=batch_id, needs=material_list, depth=-1, arrange_timing=self.city_timing, prod_type=prod_type, city=self)
         self._compose_product_chain(material_list, product_chain, warehouse_will_used, expect_done_time=expect_done_time)
-        self._reconstruction_product_chain(product_chain)
+        self._schedule_product_chain(product_chain, initial=initial)
         return product_chain
 
     def _compose_product_chain(self, material_list, parent_chain, warehouse_will_used, depth=0, expect_done_time=0):
@@ -737,6 +740,55 @@ class SimCity(Listener, dict):
             parent_chain.children.append(chain)
             if not material.is_factory_material:
                 self._compose_product_chain(material.raw_materials, chain, warehouse_will_used, depth=depth + 1, expect_done_time=expect_done_time)
+
+    def _schedule_order(self, c1: Product, c2: Product):
+        d = c2.depth - c1.depth
+        if d != 0:
+            return d
+        w = c1.waiting_time - c2.waiting_time
+        if w != 0:
+            return w
+        return c1.pid - c2.pid
+
+    def _schedule_product_chain(self, chain, initial=False):
+        '''根据物料需要的商店,重构生产链(因为商店同时只能有一个生产位)'''
+        shops_schedule = {}
+        fact_schedule = []
+        for child in sorted(self.batch_to_list(chain.children), key=functools.cmp_to_key(self._schedule_order)):
+            if child.is_factory_material:
+                fact_schedule.append(child)
+                continue
+            if child.shop_name in shops_schedule:
+                _schedule = shops_schedule[child.shop_name]
+            else:
+                if initial:
+                    _schedule = ScheduleTable(0)
+                else:
+                    _schedule = ScheduleTable(city_timing=self.city_timing, pending_timing=self.get_shop(child.shop_name).pending_timing)
+                shops_schedule[child.shop_name] = _schedule
+            _schedule.schedule_earliest(product=child)
+        self._schedule_latest(chain, shops_schedule)
+        latest_child = max(chain.children, key=lambda c: c.latest_product_timing + c.time_consuming)
+        chain.all_product_time_consuming = latest_child.latest_product_timing + latest_child.time_consuming - self.city_timing
+        logging.debug('工厂')
+        for child in sorted(fact_schedule, key=lambda c: c.latest_product_timing):
+            logging.debug('%s(%s)', child, fmt_time(child.time_consuming))
+        for shop_name in sorted(shops_schedule):
+            logging.debug(shop_name)
+            shops_schedule[shop_name].log()
+        return shops_schedule
+
+    def _schedule_latest(self, chain, shops_schedule):
+        for child in sorted(chain.children, key=lambda p: p.all_product_time_consuming, reverse=True):
+            if child.is_factory_material:
+                child.latest_product_timing = chain.latest_product_timing - child.time_consuming
+                if child.earliest_product_timing < child.latest_product_timing:
+                    logging.debug('%s %s => %s', child, fmt_time(child.earliest_product_timing), fmt_time(child.latest_product_timing))
+                continue
+            _schedule = shops_schedule[child.shop_name]
+            _schedule.schedule_latest(child, chain.latest_product_timing)
+        for child in sorted(chain.children, key=lambda p: p.all_product_time_consuming, reverse=True):
+            self._schedule_latest(child, shops_schedule)
 
     def _reconstruction_product_chain(self, chain):
         '''根据物料需要的商店,重构生产链(因为商店同时只能有一个生产位)'''

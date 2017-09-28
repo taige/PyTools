@@ -426,7 +426,7 @@ class Mayor:
                     continue
                 to_del = []
                 if sub_cmd == 'delete':
-                    self._city.collect_waiting(prod.children, to_del)
+                    self._city.batch_to_list(prod.children, to_del)
                 to_del.append(prod)
                 for _del in sorted(to_del, key=lambda d: d.latest_product_timing):
                     _fact = self._city.factories if _del.is_factory_material else self._city.get_shop(_del.shop_name)
