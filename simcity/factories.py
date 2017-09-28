@@ -56,15 +56,17 @@ class Factories(dict):
     def __str__(self):
         return "%s#%d" % (self.cn_name, self.slot)
 
-    def _producting(self, pid, raise_on_nf=True):
+    def _producting(self, pid, raise_on_nf=True, pop=False):
         pid, _pid = abs(pid), pid
         if pid in self.__producting:
             return self.__producting[pid]
         p = self._city.get_product(pid)
         if p is None and raise_on_nf:
             raise Exception("没有找到 %d 的生产" % _pid)
-        if p is not None:
+        if p is not None and not pop:
             self.__producting[pid] = p
+        if pop:
+            self.__producting.pop(pid, None)
         return p
 
     def _factory_get(self, i: int) -> Product:
@@ -83,9 +85,9 @@ class Factories(dict):
         if i >= self.slot or self._factory[i] is None:
             return None
         pid, self._factory[i] = self._factory[i], None
-        p = self.__producting.pop(abs(pid), None)
+        p = self._producting(pid, pop=True)
         self._idle += 1
-        return p if p is not None else abs(pid)
+        return p
 
     def waiting_delete(self, product: Product):
         if self._waiting_del(product.pid):
@@ -333,6 +335,13 @@ class Factories(dict):
         else:
             return '%s' % _fact
 
+    def _manufacture_order(self, pid1, pid2):
+        if pid1 is None:
+            return -1
+        if pid2 is None:
+            return 1
+        return manufacture_order(self._producting(pid1), self._producting(pid2))
+
     def _compose_factory_arrange_detail(self):
         _arrange_str = '['
         for pid in sorted(self._factory, key=lambda _pid: 0 if _pid is None else self._producting(_pid).latest_product_timing):
@@ -365,7 +374,7 @@ class Factories(dict):
                 return 'zzz...'
         _arrange_str = self._compose_factory_arrange(batch_id, detail=print_idle) if batch_id == 0 or self._manufacturing_count(batch_id) > 0 else '[ ]'
         if self._waiting_count(batch_id) > 0:
-            self._waiting.sort(key=lambda wm: self._producting(wm).latest_product_timing)
+            self._waiting.sort(key=functools.cmp_to_key(self._manufacture_order))
             _w_str = ''
             for i in range(0, len(self._waiting)):
                 w = self._producting(self._waiting[i])

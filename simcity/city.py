@@ -11,14 +11,6 @@ from simcity.warehouse import Warehouse
 from tsproxy.listener import Listener
 
 
-def _manufacture_order(p1, p2):
-    if not p1.is_factory_material and p2.is_factory_material:
-        return -1
-    if p1.is_factory_material and not p2.is_factory_material:
-        return 1
-    return p1.latest_product_timing - p2.latest_product_timing
-
-
 class SimCity(Listener, dict):
 
     def __init__(self, json_materials, dump_func, loop=None, **kwargs):
@@ -434,7 +426,7 @@ class SimCity(Listener, dict):
         nearest_products = {}
         warehouse_consumed = []
         capacity = self.warehouse.capacity
-        for m in sorted(self._waiting, key=functools.cmp_to_key(_manufacture_order)):
+        for m in sorted(self._waiting, key=functools.cmp_to_key(manufacture_order)):
             _fact = self.factories if m.is_factory_material else self.get_shop(m.shop_name)
             idle_slots.setdefault(_fact, _fact.idle_slot)
             available_slots.setdefault(_fact, _fact.available_slot)
@@ -446,7 +438,7 @@ class SimCity(Listener, dict):
                         and not self.warehouse.consume(*m.raw_materials, batch_id=m.batch_id, consumed=_consumed, exact_batch=m.is_for_sell, any_batch=available_slots[_fact] == _fact.slot)):
                 if nearest is None:
                     nearest_products[_fact] = m
-                if m.latest_product_timing <= self.city_timing:
+                if m.latest_product_timing <= self.city_timing and m.prod_type > 2:
                     if available_slots[_fact] <= 0 or idle_slots[_fact] < 0:
                         self.cprint('\x1b[1;37;41m产品 [%s] 该开始但是 [%s] 生产槽位不足\x1b[0m', m, _fact['cn_name'])
                     elif m.is_factory_material and capacity <= 0:

@@ -617,13 +617,18 @@ class Product(Material):
 
     @property
     def time_consuming(self):
+        return self._time_consuming()
+
+    def _time_consuming(self, start_timing=None):
+        if start_timing is None:
+            start_timing = self.start_timing
         if self._material is not None:
             if self._city is not None:
                 if self.shop_name is not None:
                     _factory = self._city.get_shop(self.shop_name)
                 else:
                     _factory = self._city.factories
-                return _factory.adjust_time_consuming(self._material.time_consuming, self.start_timing)
+                return _factory.adjust_time_consuming(self._material.time_consuming, start_timing)
             else:
                 return self._material.time_consuming
         else:
@@ -641,7 +646,7 @@ class Product(Material):
                 if p is None or p.is_done() or p.pid == self.pid:
                     break
                 _time_to_done = p.time_to_done
-            _time_to_done += self.time_consuming
+            _time_to_done += self._time_consuming(self._city.city_timing + _time_to_done)
         else:
             _time_to_done = self.time_consuming
         self['_time_to_done'] = fmt_time(_time_to_done)
@@ -891,6 +896,18 @@ class Product(Material):
         else:
             self['latest_product_timing'] = max(0, self._parent.latest_product_timing - self.time_consuming)
         return self['latest_product_timing']
+
+
+def manufacture_order(p1: Product, p2: Product):
+    # shop优先(因为能降低库存)
+    if not p1.is_factory_material and p2.is_factory_material:
+        return -1
+    if p1.is_factory_material and not p2.is_factory_material:
+        return 1
+    # prod_type 越大越优先
+    o = p2.prod_type - p1.prod_type
+    # 同类型按照排产顺序
+    return p1.latest_product_timing - p2.latest_product_timing if o == 0 else o
 
 
 class TimeoutQueue(asyncio.Queue):
