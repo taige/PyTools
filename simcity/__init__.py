@@ -894,7 +894,7 @@ class Product(Material):
             t = 0
         else:
             t = self.time_consuming
-        if not self.is_factory_material:
+        if len(self.children) > 0:
             t += max(self.children, key=lambda c: c.all_product_time_consuming).all_product_time_consuming
         return t
 
