@@ -764,9 +764,9 @@ class SimCity(Listener, dict):
             latest_child = max(chain.children, key=lambda c: c.latest_product_timing + c.time_consuming)
             chain.all_product_time_consuming = latest_child.latest_product_timing + latest_child.time_consuming - self.city_timing
         # output the schedule
-        fact_schedule.log(stdout=not initial)
+        fact_schedule.log(stdout=False)
         for shop_name in sorted(shops_schedules):
-            shops_schedules[shop_name].log(stdout=not initial)
+            shops_schedules[shop_name].log(stdout=False)
         return shops_schedules
 
     def _schedule_latest(self, chain: Product, shops_schedules: dict, fact_schedule: Schedule, latest=0):

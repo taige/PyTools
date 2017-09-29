@@ -176,8 +176,8 @@ class MaterialDict(dict):
                 _factory = city.get_shop(m.shop_name)
             else:
                 _factory = city.factories
-            _str += '耗时: %s' % fmt_time_delta(_factory.stars_speed_up * m.time_consuming)
-            _str += '/%s   ' % fmt_time_delta(m.all_product_time_consuming)
+            _str += '耗时: %s' % fmt_time_delta(_factory.stars_speed_up * m.time_consuming, always_show_hour=True)
+            _str += '/%s   ' % fmt_time_delta(m.all_product_time_consuming, always_show_hour=True)
             _str += '$%4d/%2.0f/%2.0f   ' % (m.max_value, m.max_value_pm, m.profit_pm)
             if not m.is_factory_material:
                 _str += '商店: %s 原材料: %s' % (format_cn(m.shop_name + '★' * _factory.stars, 12, left_align=True), m.raw_materials)
