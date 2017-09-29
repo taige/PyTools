@@ -7,6 +7,7 @@ import os
 import asyncio
 import functools
 import time
+from datetime import datetime
 from collections import OrderedDict
 
 from tsproxy.common import Timeout
@@ -35,7 +36,7 @@ def lookup_conf_file(conf_file):
     return conf_file
 
 
-def fmt_time(t, always_show_hour=False, unit='s'):
+def fmt_time(t, always_show_hour=False, is_time_delta=False, unit='s'):
     if unit == 's':
         m = t / 60
         t %= 60
@@ -46,7 +47,15 @@ def fmt_time(t, always_show_hour=False, unit='s'):
         return '%02d:%02d' % (m, t)
     h = m / 60
     m %= 60
-    return '%02d:%02d:%02d' % (h % 24, m, t)
+    return '%02d:%02d:%02d' % (h if is_time_delta else (h % 24), m, t)
+
+
+def fmt_time_delta(t, always_show_hour=False, is_time_delta=True, **kwargs):
+    return fmt_time(t, always_show_hour=always_show_hour, is_time_delta=is_time_delta, **kwargs)
+
+
+def fmt_city_timing(t, always_show_hour=True, **kwargs):
+    return fmt_time(t, always_show_hour=always_show_hour, **kwargs)
 
 
 def str2time(str_time):
@@ -111,76 +120,10 @@ def format_cn(cn, width=1, left_align=False, right_align=False):
     return '{0:>{wd}}'.format(cn, wd=width) if right_align else '{0:<{wd}}'.format(cn, wd=width) if left_align else '{0:^{wd}}'.format(cn, wd=width)
 
 
-class _Schedule(list):
-
-    def __init__(self, product, start, end):
-        super().__init__([start, end, product, start])
-
-    @property
-    def start(self):
-        return self[0]
-
-    @property
-    def end(self):
-        return self[1]
-
-    @property
-    def product(self):
-        return self[2]
-
-    @property
-    def latest_start(self):
-        return self[3]
-
-    @latest_start.setter
-    def latest_start(self, t):
-        self[3] = t
-
-
-class ScheduleTable:
-
-    def __init__(self, city_timing, pending_timing=0):
-        self._city_timing = city_timing
-        self._pending_timing = pending_timing
-        self._schedule = []
-
-    def schedule_earliest(self, expect_start=None, duration=None, product=None):
-        if product is not None and isinstance(product, Product):
-            expect_start = product.waiting_time
-            duration = product.time_consuming
-        if isinstance(expect_start, str):
-            expect_start = str2time(expect_start)
-        if isinstance(duration, str):
-            duration = str2time(duration)
-        start = self._city_timing + max(self._pending_timing, expect_start)
-        for _sch in self._schedule:
-            if _sch.end < start:
-                continue
-            if start + duration < _sch.start:
-                break
-            start = _sch.end
-        self._schedule.append(_Schedule(product, start, start + duration))
-        self._schedule.sort(key=lambda _s: _s.start)
-        if product is not None and isinstance(product, Product):
-            product.earliest_product_timing = start
-            product.all_product_time_consuming = start + product.time_consuming - self._city_timing
-        return start
-
-    def schedule_latest(self, product, latest):
-        latest_end = latest
-        for _sch in sorted(self._schedule, key=lambda _s: _s.latest_start, reverse=True):
-            if _sch.product.pid == product.pid:
-                if _sch.latest_start + product.time_consuming < latest_end:
-                    _sch.latest_start = latest_end - product.time_consuming
-                product.latest_product_timing = _sch.latest_start
-                if _sch.start < _sch.latest_start:
-                    logging.debug('%s %s-%s => %s-%s', product, fmt_time(_sch.start), fmt_time(_sch.start), fmt_time(_sch.latest_start), fmt_time(_sch.latest_start + product.time_consuming))
-                break
-            latest_end = _sch.latest_start
-
-    def log(self):
-        for _sch in self._schedule:
-            logging.debug('%s(%s-%s)', _sch.product, fmt_time(_sch.start), fmt_time(_sch.end))
+def zero_timing():
+    n = datetime.now()
+    z = datetime(n.year, n.month, n.day)
+    return z.timestamp()
 
 
 class MaterialDict(dict):
@@ -233,8 +176,8 @@ class MaterialDict(dict):
                 _factory = city.get_shop(m.shop_name)
             else:
                 _factory = city.factories
-            _str += '耗时: %s' % fmt_time(_factory.stars_speed_up * m.time_consuming, always_show_hour=True)
-            _str += '/%s   ' % fmt_time(m.all_product_time_consuming, always_show_hour=True)
+            _str += '耗时: %s' % fmt_time_delta(_factory.stars_speed_up * m.time_consuming)
+            _str += '/%s   ' % fmt_time_delta(m.all_product_time_consuming)
             _str += '$%4d/%2.0f/%2.0f   ' % (m.max_value, m.max_value_pm, m.profit_pm)
             if not m.is_factory_material:
                 _str += '商店: %s 原材料: %s' % (format_cn(m.shop_name + '★' * _factory.stars, 12, left_align=True), m.raw_materials)
@@ -601,6 +544,7 @@ class Product(Material):
             self['children'] = _children
 
         self.raw_consumed = None
+        self.put_off = 0
         self._children_changed = True
 
     def __str__(self):
@@ -725,7 +669,7 @@ class Product(Material):
             _time_to_done += self._time_consuming(self._city.city_timing + _time_to_done)
         else:
             _time_to_done = self.time_consuming
-        self['_time_to_done'] = fmt_time(_time_to_done)
+        self['_time_to_done'] = fmt_time_delta(_time_to_done)
         return _time_to_done
 
     @property
@@ -972,15 +916,17 @@ class Product(Material):
     def latest_product_timing(self, t):
         self['latest_product_timing'] = t
 
-    @property
-    def earliest_product_timing(self):
-        if self.depth < 0:
-            return 0
-        return self.get('earliest_product_timing', self.waiting_time)
 
-    @earliest_product_timing.setter
-    def earliest_product_timing(self, t):
-        self['earliest_product_timing'] = t
+class Schedule:
+
+    def schedule_earliest(self, product: Product):
+        raise NotImplementedError()
+
+    def schedule_latest(self, product: Product, latest: int):
+        raise NotImplementedError()
+
+    def log(self, stdout=False, fact_name=None):
+        raise NotImplementedError()
 
 
 def manufacture_order(p1: Product, p2: Product):
@@ -1081,27 +1027,4 @@ if __name__ == '__main__':
     assert 1 == str2time('m1')
     assert 1 == str2time('m1s')
 
-    def _zero_timing():
-        from datetime import datetime
-        n = datetime.now()
-        z = datetime(n.year, n.month, n.day)
-        return z.timestamp()
-
-    s = ScheduleTable(round(time.time() - _zero_timing()))
-    s.schedule_earliest('6h', '2h15m', '牛肉1')
-    s.schedule_earliest('3h', '27m', '面粉1')
-    s.schedule_earliest('6h', '1h34m', '奶酪1')
-    s.schedule_earliest('3h', '27m', '面粉2')
-    s.schedule_earliest('6h', '1h34m', '奶酪2')
-    s.schedule_earliest('6h', '2h15m', '牛肉2')
-    # s.schedule_earliest('20m', '18m', '蔬菜')
-    # s.schedule_earliest('20m', '18m', '蔬菜2')
-    # s.schedule_earliest('20m', '18m', '蔬菜2')
-    # s.schedule_earliest('3h', '27m', '面粉3')
-    # s.schedule_earliest('3h', '27m', '面粉4')
-    s.schedule_earliest('20m', '18m', '蔬菜1')
-    s.schedule_earliest('1h57m', '1h21m', '西瓜1')
-    s.schedule_earliest('20m', '18m', '蔬菜2')
-    s.schedule_earliest('1h57m', '1h21m', '西瓜2')
-    s.log()
 

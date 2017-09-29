@@ -1,7 +1,6 @@
 import json
 import platform
 import socket
-from datetime import datetime
 
 from simcity import *
 from simcity.factories import Factories
@@ -352,17 +351,17 @@ class SimCity(Listener, dict):
             else:
                 self._mayor.mprint(*args, ignore_ui=ignore_ui, print_prompt=print_prompt, **kwargs)
                 kwargs.pop('end', None)
-                print('%s' % fmt_time(self.city_timing, always_show_hour=True), args[0] % args[1:], **kwargs)
+                print('%s' % fmt_city_timing(self.city_timing), args[0] % args[1:], **kwargs)
             kwargs.pop('end', None)
             kwargs.pop('flush', None)
             kwargs.pop('file', None)
             if stack_info:
                 logging.exception(args[0], *args[1:], **kwargs)
             else:
-                logging.log(level, ('%s ' % fmt_time(self.city_timing, always_show_hour=True)) + args[0], *args[1:], **kwargs)
+                logging.log(level, ('%s ' % fmt_city_timing(self.city_timing)) + args[0], *args[1:], **kwargs)
         else:
             self._mayor.mprint(*args, ignore_ui=ignore_ui, print_prompt=print_prompt, **kwargs)
-            print('%s' % fmt_time(self.city_timing, always_show_hour=True), **kwargs)
+            print('%s' % fmt_city_timing(self.city_timing), **kwargs)
 
     def show_city_status(self, *shops, show_all=False, warehouse=False, factories=False, out=None):
         if show_all or warehouse:
@@ -381,9 +380,9 @@ class SimCity(Listener, dict):
                         _needs_ += '\n%s' % (' ' * 23)
                     _undone = prod.get_undone_list()
                     _warehouse_undone = len(prod.needs - self.warehouse)  # 如果仓库商品满足需求即显示标识✔︎
-                    _needs_ += '#%d: %s %s 待完成: [\x1b[0;34;46m%s\x1b[0m] %s' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False),
-                                                                                MaterialList.to_str(_undone, prefix='', suffix=''),
-                                                                                '\x1b[1;35;48m[ ✔︎ ]\x1b[0m' if _warehouse_undone == 0 and not prod.is_for_sell else '')
+                    _needs_ += '#%d: %s %s 待完成: [\x1b[0;34;46m%s\x1b[0m]%s (%d)' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False),
+                                                                                    MaterialList.to_str(_undone, prefix='', suffix=''),
+                                                                                    ' \x1b[1;35;48m[ ✔︎ ]\x1b[0m' if _warehouse_undone == 0 and not prod.is_for_sell else '', prod.pid)
                 if _done_ != '':
                     self.cprint('    完成需求: %s', _done_, out=out)
                 if _needs_ != '':
@@ -499,11 +498,11 @@ class SimCity(Listener, dict):
                 batch_done = True
                 self.cprint()
                 self.cprint('========================================', level=logging.NOTSET)
-                self.cprint('\x1b[1;35;48m恭喜！需求#%d %s 完成生产，耗时 %s\x1b[0m', p.batch_id, MaterialList.to_str(p.needs, sort_by_count=False), fmt_time(self.city_timing - p.arrange_timing))
+                self.cprint('\x1b[1;35;48m恭喜！需求#%d %s 完成生产，历时 %s\x1b[0m', p.batch_id, MaterialList.to_str(p.needs, sort_by_count=False), fmt_time_delta(self.city_timing - p.arrange_timing))
                 self.cprint('========================================', level=logging.NOTSET)
                 self.cprint()
                 self._mayor.notify_by_bel()
-                self.display_notification('需求#%d %s 完成生产，耗时 %s' % (p.batch_id, MaterialList.to_str(p.needs, sort_by_count=False), fmt_time(self.city_timing - p.arrange_timing)), subtitle='恭喜！')
+                self.display_notification('需求#%d %s 完成生产，历时 %s' % (p.batch_id, MaterialList.to_str(p.needs, sort_by_count=False), fmt_time_delta(self.city_timing - p.arrange_timing)), subtitle='恭喜！')
                 p.notified = True
             if p.is_done() and len(p.children) == 0 and (p.consumed or p.is_for_sell):  # 非储备/待售物料的话，等待UI消费，否则自动入仓库待售
                 logging.debug('batch[%s] is free', repr(p))
@@ -521,7 +520,7 @@ class SimCity(Listener, dict):
         '''
         while True:
             _wh_changed = self.warehouse.changed
-            logging.debug('time consumed ... %s %s', fmt_time(self.city_timing, always_show_hour=True), 'warehouse.changed' if _wh_changed else '')
+            logging.debug('time consumed ... %s %s', fmt_city_timing(self.city_timing), 'warehouse.changed' if _wh_changed else '')
             self.warehouse.status_reset()
 
             _show_factories = self.factories.check_products_done()
@@ -561,7 +560,7 @@ class SimCity(Listener, dict):
             elif forward < 0:
                 logging.debug('only occur in recover mode')
                 return
-            logging.info('forward %s ', fmt_time(_forward_sec))
+            logging.info('forward %s ', fmt_time_delta(_forward_sec))
 
     def reset_timing(self, out=False):
         if not self.is_city_idle or self.factories.speed_up_end_timing > self.city_timing:
@@ -587,7 +586,7 @@ class SimCity(Listener, dict):
                 self._time_goes(-1)
                 self.pop('_city_forward_timing')
                 self.cprint('SimCity recover from \x1b[1;37;40m%s\x1b[0m >>> \x1b[1;37;40m%s\x1b[0m(+\x1b[1;37;40m%s\x1b[0m)',
-                            fmt_time(last_timing, always_show_hour=True), fmt_time(self.city_timing, always_show_hour=True), fmt_time(self.city_timing - last_timing))
+                            fmt_city_timing(last_timing), fmt_city_timing(self.city_timing), fmt_time_delta(self.city_timing - last_timing))
         else:
             self.show_city_status(show_all=True)
 
@@ -612,15 +611,15 @@ class SimCity(Listener, dict):
                         forward -= 1
                     forward_seconds = self.city_timing - before_forward
                     self.cprint('SimCity time forward#%d %s: \x1b[1;37;40m%s\x1b[0m >>> \x1b[1;37;40m%s\x1b[0m(+\x1b[1;37;40m%s\x1b[0m)',
-                                forward, 'END' if self.is_city_idle else 'DONE',
-                                fmt_time(before_forward, always_show_hour=True), fmt_time(self.city_timing, always_show_hour=True), fmt_time(forward_seconds))
+                                forward, 'END' if self.is_city_idle else 'DONE', fmt_city_timing(before_forward), fmt_city_timing(self.city_timing), fmt_time_delta(forward_seconds))
                 if self.is_city_idle:
                     self.reset_timing(out=not city_idle)
 
                 nearest_done_time = self._nearest_producted.time_to_done if self._nearest_producted is not None else -1
                 if nearest_done_time > 0:
                     fact_name = self.factories.cn_name if self._nearest_producted.is_factory_material else self.get_shop(self._nearest_producted.shop_name).cn_name
-                    self.cprint('  %s 将在 \x1b[1;37;40m%s\x1b[0m 后完成 \x1b[3;38;48m%s\x1b[0m' % (format_cn(fact_name, 8, left_align=True), fmt_time(nearest_done_time), repr(self._nearest_producted)), level=logging.DEBUG)
+                    self.cprint('  %s 将在 \x1b[1;37;40m%s\x1b[0m 后完成 \x1b[3;38;48m%s\x1b[0m' %
+                                (format_cn(fact_name, 8, left_align=True), fmt_time_delta(nearest_done_time), repr(self._nearest_producted)), level=logging.DEBUG)
 
                 # 等待输入或者下一个生产完成
                 before_wait = self.city_timing
@@ -662,15 +661,15 @@ class SimCity(Listener, dict):
                 try:
                     if '_city_forward_timing' in self:
                         if self.city_abs_timing >= self['_city_forward_timing']:
-                            logging.info('SimCity time[%s] catch up[%s] finally', fmt_time(self.city_abs_timing), fmt_time(self['_city_forward_timing']))
+                            logging.info('SimCity time[%s] catch up[%s] finally', fmt_city_timing(self.city_abs_timing), fmt_city_timing(self['_city_forward_timing']))
                             self.pop('_city_forward_timing')
                         else:
-                            logging.info('SimCity time ahead %s ...' % fmt_time(self['_city_forward_timing'] - self.city_abs_timing))
+                            logging.info('SimCity time ahead %s ...' % fmt_time_delta(self['_city_forward_timing'] - self.city_abs_timing))
                     if nearest_done_time is not None and nearest_done_time > 0:
                         _should_wakeup_timing = before_wait + nearest_done_time
                         if self.city_timing > _should_wakeup_timing + 10:
                             # wait too long to miss the nearest done, we should make up it
-                            logging.info('wait too long to miss the nearest done @%s, we should make up it', fmt_time(_should_wakeup_timing))
+                            logging.info('wait too long to miss the nearest done @%s, we should make up it', fmt_city_timing(_should_wakeup_timing))
                             self._recover(last_timing=_should_wakeup_timing)
                 except BaseException as ex_f:
                     self.cprint("fetal error at finally block: %s(%s)", ex_f.__class__.__name__, ex_f)
@@ -695,18 +694,13 @@ class SimCity(Listener, dict):
             self.cprint("将要消耗库存: %s" % warehouse_will_used)
 
         if not product_chain.is_done() and product_chain.has_children:
-            delay = 0
-            if product_chain.all_product_time_consuming < expect_done_time:
-                delay = expect_done_time - product_chain.all_product_time_consuming
-                product_chain.arrange_timing += delay
-
             self._arrange_product_chain(product_chain.children)
 
             logging.debug("product_chain: %s", json.dumps(product_chain, indent=2, ensure_ascii=False, sort_keys=True))
 
-            self.cprint("\x1b[1;35;48m最少需要时间: %s\x1b[0m" % (fmt_time(product_chain.all_product_time_consuming)))
+            self.cprint("\x1b[1;35;48m最少需要时间: %s\x1b[0m" % (fmt_time_delta(product_chain.all_product_time_consuming)))
             # self.cprint("生产链顶端: %s" % product_chain.children)
-            self.cprint("\x1b[1;35;48m生产计划: %s\x1b[0m", '' if delay == 0 else '(推迟%s开始生产)' % fmt_time(delay))
+            self.cprint("\x1b[1;35;48m生产计划: %s\x1b[0m", '' if product_chain.put_off <= 0 else '(推迟%s开始生产)' % fmt_time_delta(product_chain.put_off))
             self.factories.print_arrangement(product_chain.batch_id)
             for shop in self.shops:
                 shop.print_arrangement(product_chain.batch_id)
@@ -719,7 +713,7 @@ class SimCity(Listener, dict):
     def compose_product_chain(self, batch_id, material_list, warehouse_will_used, prod_type=Product.PT_BUILDING, expect_done_time=0, initial=False):
         product_chain = Product(batch_id=batch_id, needs=material_list, depth=-1, arrange_timing=self.city_timing, prod_type=prod_type, city=self)
         self._compose_product_chain(material_list, product_chain, warehouse_will_used, expect_done_time=expect_done_time)
-        self._schedule_product_chain(product_chain, initial=initial)
+        self._schedule_product_chain(product_chain, initial=initial, expect_done_time=expect_done_time)
         return product_chain
 
     def _compose_product_chain(self, material_list, parent_chain, warehouse_will_used, depth=0, expect_done_time=0):
@@ -750,45 +744,42 @@ class SimCity(Listener, dict):
             return w
         return c1.pid - c2.pid
 
-    def _schedule_product_chain(self, chain, initial=False):
+    def _schedule_product_chain(self, chain, initial=False, expect_done_time=0):
         '''根据物料需要的商店,重构生产链(因为商店同时只能有一个生产位)'''
-        shops_schedule = {}
-        fact_schedule = []
+        shops_schedules = {}
+        fact_schedule = self.factories.get_schedule(initial=initial)
         for child in sorted(self.batch_to_list(chain.children), key=functools.cmp_to_key(self._schedule_order)):
             if child.is_factory_material:
-                fact_schedule.append(child)
-                continue
-            if child.shop_name in shops_schedule:
-                _schedule = shops_schedule[child.shop_name]
+                _schedule = fact_schedule
             else:
-                if initial:
-                    _schedule = ScheduleTable(0)
+                if child.shop_name in shops_schedules:
+                    _schedule = shops_schedules[child.shop_name]
                 else:
-                    _schedule = ScheduleTable(city_timing=self.city_timing, pending_timing=self.get_shop(child.shop_name).pending_timing)
-                shops_schedule[child.shop_name] = _schedule
+                    _schedule = self.get_shop(child.shop_name).get_schedule(initial=initial)
+                    shops_schedules[child.shop_name] = _schedule
             _schedule.schedule_earliest(product=child)
-        self._schedule_latest(chain, shops_schedule)
-        latest_child = max(chain.children, key=lambda c: c.latest_product_timing + c.time_consuming)
-        chain.all_product_time_consuming = latest_child.latest_product_timing + latest_child.time_consuming - self.city_timing
-        logging.debug('工厂')
-        for child in sorted(fact_schedule, key=lambda c: c.latest_product_timing):
-            logging.debug('%s(%s)', child, fmt_time(child.time_consuming))
-        for shop_name in sorted(shops_schedule):
-            logging.debug(shop_name)
-            shops_schedule[shop_name].log()
-        return shops_schedule
+        self._schedule_latest(chain, shops_schedules, fact_schedule, latest=expect_done_time)
+        # chain.children maybe empty if warehouse have all needs
+        if len(chain.children) > 0:
+            latest_child = max(chain.children, key=lambda c: c.latest_product_timing + c.time_consuming)
+            chain.all_product_time_consuming = latest_child.latest_product_timing + latest_child.time_consuming - self.city_timing
+        # output the schedule
+        fact_schedule.log(stdout=not initial)
+        for shop_name in sorted(shops_schedules):
+            shops_schedules[shop_name].log(stdout=not initial)
+        return shops_schedules
 
-    def _schedule_latest(self, chain, shops_schedule):
+    def _schedule_latest(self, chain: Product, shops_schedules: dict, fact_schedule: Schedule, latest=0):
+        latest = max(chain.latest_product_timing, latest)
+        chain.put_off = latest - chain.latest_product_timing
         for child in sorted(chain.children, key=lambda p: p.all_product_time_consuming, reverse=True):
             if child.is_factory_material:
-                child.latest_product_timing = chain.latest_product_timing - child.time_consuming
-                if child.earliest_product_timing < child.latest_product_timing:
-                    logging.debug('%s %s => %s', child, fmt_time(child.earliest_product_timing), fmt_time(child.latest_product_timing))
-                continue
-            _schedule = shops_schedule[child.shop_name]
-            _schedule.schedule_latest(child, chain.latest_product_timing)
+                _schedule = fact_schedule
+            else:
+                _schedule = shops_schedules[child.shop_name]
+            _schedule.schedule_latest(child, latest)
         for child in sorted(chain.children, key=lambda p: p.all_product_time_consuming, reverse=True):
-            self._schedule_latest(child, shops_schedule)
+            self._schedule_latest(child, shops_schedules, fact_schedule)
 
     def _reconstruction_product_chain(self, chain):
         '''根据物料需要的商店,重构生产链(因为商店同时只能有一个生产位)'''

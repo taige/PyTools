@@ -13,6 +13,8 @@ class Shop(Factories):
 
     @property
     def pending_timing(self):
+        if not self.is_busying:
+            return 0
         timing = 0
         for i in sorted(range(self.slot), reverse=True):
             p = self.factory_get(i)
@@ -20,11 +22,11 @@ class Shop(Factories):
                 continue
             timing = p.time_to_done
             break
-        logging.debug('%s.pending_timing=%s', self.cn_name, fmt_time(timing))
+        logging.debug('%s.pending_timing=%s', self.cn_name, fmt_time_delta(timing))
         return timing
 
-    def factory_get(self, i: int) -> Product:
-        return super()._factory_get(i)
+    def get_schedule(self, initial=False) -> Schedule:
+        return ShopSchedule(0, self) if initial else ShopSchedule(self._city.city_timing, fact=self, pending_timing=self.pending_timing)
 
     def is_busying(self):
         w = self._factory_get(0)
@@ -86,7 +88,7 @@ class Shop(Factories):
             p = self._factory_get(0)
             if p is not None and p.start_timing == -1:
                 p.start_timing = self._city.city_timing
-                self._city.cprint('  %s 开始生产 %s\x1b[1;38;48m%s\x1b[0m, 预计耗时 %s', self.cn_name, '' if p.depth > 0 else '\x1b[4;38;48m', repr(p), fmt_time(p.time_consuming))
+                self._city.cprint('  %s 开始生产 %s\x1b[1;38;48m%s\x1b[0m, 预计耗时 %s', self.cn_name, '' if p.depth > 0 else '\x1b[4;38;48m', p, fmt_time_delta(p.time_consuming))
         return m
 
     def _compose_factory_arrange(self, batch_id, detail=False):
@@ -113,3 +115,30 @@ class Shop(Factories):
         if self.speed_up_end_timing > self._city.city_timing and batch_id == 0:
             _arrange_str = '\x1b[1;33;48m%s\x1b[0m' % _arrange_str
         return _arrange_str
+
+
+class ShopSchedule(FactorySchedule):
+
+    def __init__(self, city_timing, fact=None, **kwargs):
+        super().__init__(city_timing, fact, **kwargs)
+
+
+if __name__ == '__main__':
+
+    s = ShopSchedule(round(time.time() - zero_timing()))
+    s.schedule_earliest_impl('6h', '2h15m', '牛肉1')
+    s.schedule_earliest_impl('3h', '27m', '面粉1')
+    s.schedule_earliest_impl('6h', '1h34m', '奶酪1')
+    s.schedule_earliest_impl('3h', '27m', '面粉2')
+    s.schedule_earliest_impl('6h', '1h34m', '奶酪2')
+    s.schedule_earliest_impl('6h', '2h15m', '牛肉2')
+    # s.schedule_earliest_impl('20m', '18m', '蔬菜')
+    # s.schedule_earliest_impl('20m', '18m', '蔬菜2')
+    # s.schedule_earliest_impl('20m', '18m', '蔬菜2')
+    # s.schedule_earliest_impl('3h', '27m', '面粉3')
+    # s.schedule_earliest_impl('3h', '27m', '面粉4')
+    s.schedule_earliest_impl('20m', '18m', '蔬菜1')
+    s.schedule_earliest_impl('1h57m', '1h21m', '西瓜1')
+    s.schedule_earliest_impl('20m', '18m', '蔬菜2')
+    s.schedule_earliest_impl('1h57m', '1h21m', '西瓜2')
+    s.log(stdout=True, fact_name='农贸市场')

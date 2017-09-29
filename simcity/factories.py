@@ -61,19 +61,22 @@ class Factories(dict):
         if pid in self.__producting:
             return self.__producting[pid]
         p = self._city.get_product(pid)
-        if p is None and raise_on_nf:
+        if p is None and raise_on_nf and not pop:
             raise Exception("没有找到 %d 的生产" % _pid)
         if p is not None and not pop:
             self.__producting[pid] = p
         if pop:
             self.__producting.pop(pid, None)
-        return p
+        return pid if p is None else p
 
     def _factory_get(self, i: int) -> Product:
         if i >= self.slot or self._factory[i] is None or self._factory[i] < 0:
             return None
         pid = self._factory[i]
         return self._producting(pid)
+
+    def factory_get(self, i: int) -> Product:
+        return self._factory_get(i)
 
     def _factory_set(self, i, p: Product):
         self.__producting[p.pid] = p
@@ -146,7 +149,8 @@ class Factories(dict):
         self['speed_up_end_timing'] = self.speed_up_start_timing + duration
         self['speed_up_times'] = times
         if start_timing is None:
-            self._city.cprint('%s 的加速币(x%d) 开始生效, 持续时间 %s 直至 %s', format_cn(self.cn_name, 8, left_align=True), self.speed_up_times, fmt_time(duration), fmt_time(self.speed_up_end_timing))
+            self._city.cprint('%s 的加速币(x%d) 开始生效, 持续时间 %s 直至 %s', format_cn(self.cn_name, 8, left_align=True), self.speed_up_times,
+                              fmt_time_delta(duration), fmt_city_timing(self.speed_up_end_timing))
         return True, self.speed_up_start_timing, self.speed_up_end_timing, self.speed_up_times
 
     @property
@@ -183,6 +187,10 @@ class Factories(dict):
         return self._cn_name
 
     @property
+    def city(self):
+        return self._city
+
+    @property
     def _factory(self):
         return self['_factory']
 
@@ -204,6 +212,9 @@ class Factories(dict):
         for k in self._factory:
             n += 1 if k is None or k < 0 else 0
         return n
+
+    def get_schedule(self, initial=False) -> Schedule:
+        return FactoriesSchedule(city_timing=0 if initial else self._city.city_timing, fact=self, initial=initial)
 
     @property
     def is_idle(self):
@@ -245,7 +256,7 @@ class Factories(dict):
             if not self.is_busying():
                 product.start_timing = self._city.city_timing
                 self._city.cprint('  %s 开始生产 %s\x1b[1;38;48m%s\x1b[0m%s.%d, 预计耗时 %s', self.cn_name, '' if product.depth > 0 else '\x1b[4;38;48m',
-                                  repr(product), product.consumed_info, self._city.warehouse.capacity, fmt_time(product.time_consuming))
+                                  repr(product), product.consumed_info, self._city.warehouse.capacity, fmt_time_delta(product.time_consuming))
             else:
                 product.start_timing = -1
                 self._city.cprint('  %s 准备生产 %s\x1b[1;38;48m%s\x1b[0m%s.%d', self.cn_name, '' if product.depth > 0 else '\x1b[4;38;48m',
@@ -268,10 +279,10 @@ class Factories(dict):
             m.product_done()
             self._city.warehouse.append(m)
             self._factory[i] = -self._factory[i]
-            self._city.cprint('  %s%s 完成生产 %s\x1b[1;38;42m%s\x1b[0m, 耗时 %s/%s', self.cn_name, ('[%02d]' % i) if m.is_factory_material else '',
+            self._city.cprint('  %s%s 完成生产 %s\x1b[1;38;42m%s\x1b[0m, 历时 %s/%s', self.cn_name, ('[%02d]' % i) if m.is_factory_material else '',
                               '' if m.depth > 0 else '\x1b[4;38;48m', repr(m),
-                              fmt_time(self._city.city_timing - m.start_timing),
-                              fmt_time(self._city.city_timing - m.arrange_timing))
+                              fmt_time_delta(self._city.city_timing - m.start_timing),
+                              fmt_time_delta(self._city.city_timing - m.arrange_timing))
             if m.depth == 0 and self._city.auto_into_warehouse:
                 self.move_to_warehouse(m, i)
             return m
@@ -397,7 +408,7 @@ class Factories(dict):
     def check_products_done(self):
         '''时光飞逝，让我们看看生产完成了没有'''
         if 0 <= self.speed_up_end_timing < self._city.city_timing and self['speed_up_times'] > 0:
-            self._city.cprint('%s 的加速币[x%d] 已经于 %s 失效', self.cn_name, self.speed_up_times, fmt_time(self.speed_up_end_timing))
+            self._city.cprint('%s 的加速币[x%d] 已经于 %s 失效', self.cn_name, self.speed_up_times, fmt_city_timing(self.speed_up_end_timing))
             self['speed_up_times'] = -self.speed_up_times
         sth_done = False
         for i in range(0, self.slot):
@@ -406,3 +417,135 @@ class Factories(dict):
             if self._check_slot_done(i) is not None:
                 sth_done = True
         return sth_done
+
+
+class _Arrangement(list):
+
+    def __init__(self, product, start, end):
+        super().__init__([start, end, product, start])
+
+    @property
+    def start(self):
+        return self[0]
+
+    @property
+    def end(self):
+        return self[1]
+
+    @property
+    def product(self):
+        return self[2]
+
+    @property
+    def latest_start(self):
+        return self[3]
+
+    @latest_start.setter
+    def latest_start(self, t):
+        self[3] = t
+
+
+class FactoriesSchedule(Schedule):
+
+    def __init__(self, city_timing, fact: Factories, initial=False):
+        self._city_timing = city_timing
+        self._fact = fact
+        self._schedule = []
+        for i in range(self._fact.slot):
+            p = None if initial else self._fact.factory_get(i)
+            _sch = FactorySchedule(self._city_timing, self._fact, pending_timing=p.time_to_done if p is not None else 0, fact_slot=i)
+            self._schedule.append(_sch)
+
+    def schedule_earliest(self, product: Product):
+        # 找一个最早可用的fact_slot
+        _sch = min(self._schedule, key=lambda _s: _s.available_timing)
+        start = _sch.schedule_earliest(product=product)
+        return start
+
+    def schedule_latest(self, product: Product, latest: int):
+        # 找到所在的fact_slot
+        for _sch in self._schedule:
+            if product in _sch:
+                _sch.schedule_latest(product, latest)
+                break
+
+    def log(self, stdout=False, fact_name=None):
+        for _sch in self._schedule:
+            _sch.log(stdout=stdout, fact_name=fact_name)
+
+
+class FactorySchedule(Schedule):
+
+    def __init__(self, city_timing: int, fact: Factories, pending_timing=0, fact_slot=None):
+        self._city_timing = city_timing
+        self._fact = fact
+        self._fact_slot = fact_slot
+        self._schedule = []
+        self._pending_timing = pending_timing
+
+    @property
+    def available_timing(self):
+        if len(self._schedule) == 0:
+            return self._city_timing
+        _sch = self._schedule[len(self._schedule) - 1]
+        return _sch.end
+
+    def __contains__(self, item):
+        if isinstance(item, Product):
+            for _sch in self._schedule:
+                if _sch.product.pid == item.pid:
+                    return True
+        return False
+
+    def schedule_earliest(self, product: Product):
+        return self.schedule_earliest_impl(expect_start=product.waiting_time, duration=product.time_consuming, product=product)
+
+    def schedule_earliest_impl(self, expect_start=None, duration=None, product=None):
+        if product is not None and isinstance(product, Product):
+            expect_start = product.waiting_time
+            duration = product.time_consuming
+        if isinstance(expect_start, str):
+            expect_start = str2time(expect_start)
+        if isinstance(duration, str):
+            duration = str2time(duration)
+        start = self._city_timing + max(self._pending_timing, expect_start)
+        for _sch in self._schedule:
+            if _sch.end < start:
+                continue
+            if start + duration < _sch.start:
+                break
+            start = _sch.end
+        if product is not None and isinstance(product, Product):
+            product.all_product_time_consuming = start + product.time_consuming - self._city_timing
+        self._schedule.append(_Arrangement(product, start, start + duration))
+        self._schedule.sort(key=lambda _s: _s.start)
+        return start
+
+    def schedule_latest(self, product: Product, latest: int):
+        latest_end = latest
+        for _sch in sorted(self._schedule, key=lambda _s: _s.latest_start, reverse=True):
+            if _sch.product.pid == product.pid:
+                if _sch.latest_start + product.time_consuming < latest_end:
+                    _sch.latest_start = latest_end - product.time_consuming
+                product.latest_product_timing = _sch.latest_start
+                if _sch.start < _sch.latest_start:
+                    logging.debug('%s %s-%s => %s-%s', product, fmt_time(_sch.start), fmt_time(_sch.end), fmt_time(_sch.latest_start), fmt_time(_sch.latest_start + product.time_consuming))
+                break
+            latest_end = _sch.latest_start
+
+    def log(self, stdout=False, fact_name=None):
+        if len(self._schedule) == 0:
+            return
+        _name = '%s' % fact_name if fact_name is not None else self._fact.cn_name
+        if self._fact_slot is not None:
+            _name += '[%d]' % self._fact_slot
+        if stdout:
+            print_func = print if self._fact is None else self._fact.city.cprint
+            print_func('%s[%s]:' % (_name, fmt_time(self._pending_timing)))
+        else:
+            logging.debug('%s[%s]:' % (_name, fmt_time(self._pending_timing)))
+        for _sch in self._schedule:
+            if stdout:
+                print_func('%s(%s-%s)' % (_sch.product, fmt_time(_sch.start), fmt_time(_sch.end)))
+            else:
+                logging.debug('%s(%s-%s)' % (_sch.product, fmt_time(_sch.start), fmt_time(_sch.end)))

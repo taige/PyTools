@@ -86,7 +86,7 @@ class Mayor:
         if self.is_online:
             msg = (args[0] % args[1:]) if len(args) > 0 else ''
             if not ignore_ui and self._waiting_ui:
-                self._ui_print_cache.append(('%s ' % fmt_time(self.city_timing, always_show_hour=True)) + msg)
+                self._ui_print_cache.append(('%s ' % fmt_city_timing(self.city_timing)) + msg)
             else:
                 self._connection.write(msg, print_prompt=print_prompt, **kwargs)
 
@@ -339,7 +339,7 @@ class Mayor:
         _s = '%s: %s' % (format_cn('%s%s%s' % (shop.cn_name, '★' * shop.stars, (' x%d' % shop.speed_up_times) if shop.speed_up_end_timing > self._city.city_timing else ''), 13, left_align=True),
                          shop.print_arrangement(print_idle=True))
         if shop.speed_up_end_timing > self._city.city_timing:
-            _s += ' \x1b[1;33;48m{加速币(x%d) 剩余时效%s}\x1b[0m' % (shop.speed_up_times, fmt_time(shop.speed_up_end_timing - self._city.city_timing))
+            _s += ' \x1b[1;33;48m{加速币(x%d) 剩余时效%s}\x1b[0m' % (shop.speed_up_times, fmt_time_delta(shop.speed_up_end_timing - self._city.city_timing))
         out.write(_s)
 
     def _cmd_shop(self, cmd_line):
@@ -364,7 +364,7 @@ class Mayor:
                     duration = 3600
                 rc, _start, _end, _times = shop.set_times_speed_up(times=times, duration=duration)
                 if not rc:
-                    out.write('%s 已经在生产加速x%d, 持续至 %s' % (format_cn(shop.cn_name, 8, left_align=True), _times, fmt_time(_end)))
+                    out.write('%s 已经在生产加速x%d, 持续至 %s' % (format_cn(shop.cn_name, 8, left_align=True), _times, fmt_city_timing(_end)))
                     return
             elif sub_cmd == 'ware':  # move all to warehouse
                 shop.move_to_warehouse(None)
@@ -445,7 +445,7 @@ class Mayor:
                     out.write('产品 %s 还没有开始生产' % prod)
                     continue
                 if prod.time_to_done <= 10:
-                    out.write('产品 %s 已经结束或快要结束(%s)生产' % (prod, fmt_time(prod.time_to_done)))
+                    out.write('产品 %s 已经结束或快要结束(%s)生产' % (prod, fmt_time_delta(prod.time_to_done)))
                     continue
                 time_to_done = prod.time_to_done
                 if sub_cmd == '+':  # 增加剩余生产时间
@@ -638,7 +638,7 @@ class Mayor:
                 ps = self._city.get_producting_list(include_pending=True)
                 for p in ps:
                     fact_name = self._city.factories.cn_name if p.is_factory_material else self._city.get_shop(p.shop_name).cn_name
-                    out.write('%s将在 \x1b[1;37;40m%s\x1b[0m 后完成 \x1b[3;38;48m%s\x1b[0m' % (format_cn(fact_name, 11), fmt_time(p.time_to_done), repr(p)))
+                    out.write('%s将在 \x1b[1;37;40m%s\x1b[0m 后完成 \x1b[3;38;48m%s\x1b[0m' % (format_cn(fact_name, 11), fmt_time_delta(p.time_to_done), repr(p)))
         elif cmd in ('+', '++') and len(args) > 0:
             if self._city.is_city_idle:
                 self._city.reset_timing()
@@ -703,7 +703,7 @@ class _Connection:
             return '%s' % self._conn
 
     def _prompt(self, pp):
-        self._conn.writer.write(('%s%s ' % ('\n' if self._prompt_printed == 0 else '', fmt_time(self._mayor.city_timing, always_show_hour=True))).encode())
+        self._conn.writer.write(('%s%s ' % ('\n' if self._prompt_printed == 0 else '', fmt_city_timing(self._mayor.city_timing))).encode())
         self._prompt_printed = pp
 
     def write(self, sth, end='\n', print_prompt=True, **kwargs):
