@@ -253,20 +253,29 @@ class SimCity(Listener, dict):
     def producting_capacity(self, to_start=None):
         # TODO capacity计数可以优化
         # 生产中的物料最小仓库占用
-        ps = self.get_producting_list(sort_by_done=False, include_pending=True)
-        n = 2  # 留出2个空余
-        children_max = 0
+        ps = self.get_producting_list(sort_by_done=False, include_pending=True, include_done=True)
+        n = 1  # 留出1个富余
+        children_max1 = 0
+        children_max2 = 0
+        max_product = None
         if to_start is not None:
             ps.extend(to_start)
         for p in ps:
+            children_count = 0
+            for child in p.parent.children:
+                if not child.in_warehouse:
+                    children_count += 1
+            if children_max1 < children_count:
+                children_max1 = children_count
+                max_product = p
             if p.depth == 0:
-                if children_max < len(p.root.needs):
-                    children_max = len(p.root.needs)
+                if children_max2 < len(p.root.needs):
+                    children_max2 = len(p.root.needs)
             else:
-                if children_max < len(p.parent.children):
-                    children_max = len(p.parent.children)
-        n += children_max
-        logging.debug('producting_capacity=%d(%d)/%d', n, children_max, len(ps))
+                if children_max2 < len(p.parent.children):
+                    children_max2 = len(p.parent.children)
+        n += children_max1
+        logging.debug('producting_capacity=%d(%d[%s]/%d)/%d', n, children_max1, max_product, children_max2, len(ps))
         return n
 
     @staticmethod
@@ -332,10 +341,10 @@ class SimCity(Listener, dict):
                 waiting_list.append(c)
         return waiting_list
 
-    def get_producting_list(self, sort_by_done=True, include_pending=False):
-        ps = self.factories.producting_list(include_pending=include_pending)
+    def get_producting_list(self, sort_by_done=True, include_pending=False, include_done=False):
+        ps = self.factories.producting_list(include_pending=include_pending, include_done=include_done)
         for shop in self.shops:
-            ps.extend(shop.producting_list(include_pending=include_pending))
+            ps.extend(shop.producting_list(include_pending=include_pending, include_done=include_done))
         return sorted(ps, key=lambda _p: _p.time_to_done) if sort_by_done else ps
 
     def get_shop(self, shop_name) -> Shop:
@@ -434,7 +443,10 @@ class SimCity(Listener, dict):
             available_slots.setdefault(_fact, _fact.available_slot)
             nearest = nearest_products.get(_fact, None)
             _consumed = []
-            if available_slots[_fact] <= 0 or idle_slots[_fact] < 0 \
+            to_start = products_to_start.get(_fact, None)
+            if m.is_factory_material and available_slots[_fact] > 0 and idle_slots[_fact] >= 0 and ((to_start is not None and to_start.contain_brother(m)) or (self.factories.is_manufacturing_brother(m))):
+                pass
+            elif available_slots[_fact] <= 0 or idle_slots[_fact] < 0 \
                     or (m.is_factory_material and capacity <= 0) \
                     or (not m.is_factory_material
                         and not self.warehouse.consume(*m.raw_materials, batch_id=m.batch_id, consumed=_consumed, exact_batch=m.is_for_sell, any_batch=available_slots[_fact] == _fact.slot)):
@@ -462,24 +474,17 @@ class SimCity(Listener, dict):
                     if m.latest_product_timing <= self.city_timing:
                         self.cprint('%s \x1b[5;38;48m的产品入库后再安排生产\x1b[0m [%s]', _fact.cn_name, m)
                     continue
-                capacity_release = 0
                 if not m.is_factory_material:
                     m.raw_consumed = _consumed
-                    for _c in _consumed:
-                        if not isinstance(_c, Product) or _c.in_warehouse:
-                            capacity_release += 1
                     warehouse_consumed.extend(_consumed)
-                if _fact in products_to_start:
-                    to_start = products_to_start[_fact]
-                else:
+                if to_start is None:
                     to_start = MaterialList()
                     products_to_start[_fact] = to_start
                 to_start.append(m)
                 idle_slots[_fact] -= 1
                 available_slots[_fact] -= 1
                 m.start_timing = -2  # 标识m可以排产
-                _capacity = capacity
-                capacity = self.products_capacity - self.warehouse.products_len - self.producting_capacity(to_start) + capacity_release
+                _capacity, capacity = capacity, self.products_capacity - self.warehouse.products_len - self.producting_capacity(to_start)
                 logging.info('%s 欲排产[%s]%s warehouse.capacity: %d => %d, ', _fact.cn_name, m, '' if m.is_factory_material else ', 消耗%s' % m.raw_consumed, _capacity, capacity)
         if len(warehouse_consumed) > 0:
             self.warehouse.extend(warehouse_consumed)

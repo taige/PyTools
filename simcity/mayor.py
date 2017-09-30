@@ -449,13 +449,14 @@ class Mayor:
                 if prod.time_to_done <= 10:
                     out.write('产品 %s 已经结束或快要结束(%s)生产' % (prod, fmt_time_delta(prod.time_to_done)))
                     continue
-                time_to_done = prod.time_to_done
+                # time_to_done = prod.time_to_done
                 if sub_cmd == '+':  # 增加剩余生产时间
                     pass
                 elif sub_cmd == '-':  # 减少剩余生产时间
                     time_delta = -time_delta
                 elif sub_cmd == '=':  # 设置剩余生产时间
-                    time_delta -= time_to_done
+                    prod.set_complete_timing(self.city_timing + time_delta)
+                    continue
                 prod.start_timing += time_delta
         if sub_cmd == 'start':
             if len(start_dict) > 0:
@@ -529,8 +530,8 @@ class Mayor:
         ('时间快进', 'forward', '[N]'),
         ('工厂设置', 'fact', '[ware | slot [1]]'),
         ('商店设置', 'shop', '[建材店|jcd [ware | slot [1] | speed [2 [3600] | star [1]]]'),
-        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; delete 删除待产商品及children; ware 移入仓库; +/- time_delta 调整完成时间
-        ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} |[+ | -] TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
+        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; delete 删除待产商品及children; ware 移入仓库; time_delta 调整完成时间
+        ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} | TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
         ('通知中心', 'nfc', '[on | off]'),
         ('自动入库', 'auto_ware', '[on | off]'),
         ('二次确认', 'confirm', '[N]'),

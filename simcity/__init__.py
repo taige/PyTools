@@ -377,6 +377,16 @@ class MaterialList(list):
                         continue
             self.append(m)
 
+    def contain_brother(self, bro):
+        if not isinstance(bro, Product):
+            return False
+        for m in self:
+            if not isinstance(m, Product):
+                continue
+            if bro.parent is m.parent and bro.batch_id == m.batch_id:
+                return True
+        return False
+
     def __sub__(self, other):
         if not isinstance(other, list):
             raise Exception('not supported operation on class: %s' % other.__class__.__name__)
@@ -657,7 +667,10 @@ class Product(Material):
     @property
     def time_to_done(self):
         if self.start_timing >= 0:
-            _time_to_done = max(self.time_consuming - (self._city.city_timing - self.start_timing), 0)
+            if 'complete_timing' in self:
+                _time_to_done = max(self['complete_timing'] - self._city.city_timing, 0)
+            else:
+                _time_to_done = max(self.time_consuming - (self._city.city_timing - self.start_timing), 0)
         elif self.start_timing == -1 and not self.is_factory_material:
             _time_to_done = 0
             _shop = self._city.get_shop(self.shop_name)
@@ -671,6 +684,9 @@ class Product(Material):
             _time_to_done = self.time_consuming
         self['_time_to_done'] = fmt_time_delta(_time_to_done)
         return _time_to_done
+
+    def set_complete_timing(self, t):
+        self['complete_timing'] = t
 
     @property
     def is_factory_material(self):

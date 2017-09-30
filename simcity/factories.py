@@ -224,6 +224,14 @@ class Factories(dict):
         n += len(self._waiting)
         return n == 0
 
+    def is_manufacturing_brother(self, bro):
+        manufacturing = MaterialList()
+        for pid in self._factory:
+            if pid is None:
+                continue
+            manufacturing.append(self._producting(pid))
+        return manufacturing.contain_brother(bro)
+
     def _manufacturing_count(self, batch_id=0):
         return self.__count(self._factory, batch_id)
 
@@ -315,13 +323,13 @@ class Factories(dict):
             p.in_warehouse = True
         self._city.cprint('    \x1b[1;38;44m%s 进入仓库\x1b[0m.%d', repr(p), self._city.warehouse.capacity)
 
-    def producting_list(self, include_pending=False):
+    def producting_list(self, include_pending=False, include_done=False):
         _ps = []
         for pid in self._factory:  # 外面还会再排序，此处不需要排序
             if pid is None or pid < 0:
                 continue
             p = self._producting(pid)
-            if p.is_done():
+            if p.is_done() and not include_done:
                 continue
             if p.start_timing >= 0 or include_pending:
                 _ps.append(p)
