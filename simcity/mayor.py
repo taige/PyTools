@@ -429,6 +429,8 @@ class Mayor:
                     self._city.batch_to_list(prod.children, to_del)
                 to_del.append(prod)
                 for _del in sorted(to_del, key=lambda d: d.latest_product_timing):
+                    if _del.batch_id != prod.batch_id:
+                        continue
                     _fact = self._city.factories if _del.is_factory_material else self._city.get_shop(_del.shop_name)
                     if _fact.waiting_delete(_del):
                         self._city.cprint('产品 %s 已从生产队列中删除', _del)
