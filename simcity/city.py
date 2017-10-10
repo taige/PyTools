@@ -747,6 +747,9 @@ class SimCity(Listener, dict):
         w = c1.waiting_time - c2.waiting_time
         if w != 0:
             return w
+        c = c2.time_consuming - c1.time_consuming
+        if c != 0:
+            return c
         return c1.pid - c2.pid
 
     def _schedule_product_chain(self, chain, initial=False, expect_done_time=0):

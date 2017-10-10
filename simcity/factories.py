@@ -494,7 +494,7 @@ class FactorySchedule(Schedule):
     @property
     def available_timing(self):
         if len(self._schedule) == 0:
-            return self._city_timing
+            return self._city_timing + self._pending_timing
         _sch = self._schedule[len(self._schedule) - 1]
         return _sch.end
 
