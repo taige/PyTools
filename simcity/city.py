@@ -430,6 +430,29 @@ class SimCity(Listener, dict):
         _fact = self.factories if product.is_factory_material else self.get_shop(product.shop_name)
         return _fact.move_to_warehouse(product)
 
+    def manufacture_order(self, p1: Product, p2: Product):
+        # shop优先(因为能降低库存)
+        if not p1.is_factory_material and p2.is_factory_material:
+            return -1
+        if p1.is_factory_material and not p2.is_factory_material:
+            return 1
+        if p1.latest_product_timing > self.city_timing and p2.latest_product_timing > self.city_timing:
+            # prod_type 越大越优先
+            o = p2.prod_type - p1.prod_type
+            if o != 0:
+                return o
+        # 同类型按照排产时间
+        o = p1.latest_product_timing - p2.latest_product_timing
+        if o != 0:
+            return o
+        # 优先生产最底层的原料
+        o = p2.depth - p1.depth
+        if o != 0:
+            return o
+        # 同一排产时间&depth，pid靠近的一起生产
+        o = p1.pid - p2.pid
+        return o
+
     def has_products_to_start(self) -> dict:
         products_to_start = OrderedDict()
         idle_slots = {}
@@ -437,7 +460,7 @@ class SimCity(Listener, dict):
         nearest_products = {}
         warehouse_consumed = []
         capacity = self.warehouse.capacity
-        for m in sorted(self._waiting, key=functools.cmp_to_key(manufacture_order)):
+        for m in sorted(self._waiting, key=functools.cmp_to_key(self.manufacture_order)):
             _fact = self.factories if m.is_factory_material else self.get_shop(m.shop_name)
             idle_slots.setdefault(_fact, _fact.idle_slot)
             available_slots.setdefault(_fact, _fact.available_slot)

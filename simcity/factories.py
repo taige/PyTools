@@ -359,7 +359,7 @@ class Factories(dict):
             return -1
         if pid2 is None:
             return 1
-        return manufacture_order(self._producting(pid1), self._producting(pid2))
+        return self._city.manufacture_order(self._producting(pid1), self._producting(pid2))
 
     def _compose_factory_arrange_detail(self):
         _arrange_str = '['

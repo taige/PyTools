@@ -13,7 +13,7 @@ from collections import OrderedDict
 from tsproxy.common import Timeout
 
 
-__version__ = '4.2.1'
+__version__ = '4.2.2'
 
 
 conf_path = []
@@ -946,29 +946,6 @@ class Schedule:
 
     def log(self, stdout=False, fact_name=None):
         raise NotImplementedError()
-
-
-def manufacture_order(p1: Product, p2: Product):
-    # shop优先(因为能降低库存)
-    if not p1.is_factory_material and p2.is_factory_material:
-        return -1
-    if p1.is_factory_material and not p2.is_factory_material:
-        return 1
-    # prod_type 越大越优先
-    o = p2.prod_type - p1.prod_type
-    if o != 0:
-        return o
-    # 同类型按照排产时间
-    o = p1.latest_product_timing - p2.latest_product_timing
-    if o != 0:
-        return o
-    # 优先生产最底层的原料
-    o = p2.depth - p1.depth
-    if o != 0:
-        return o
-    # 同一排产时间&depth，pid靠近的一起生产
-    o = p1.pid - p2.pid
-    return o
 
 
 class TimeoutQueue(asyncio.Queue):
