@@ -13,7 +13,7 @@ from collections import OrderedDict
 from tsproxy.common import Timeout
 
 
-__version__ = '4.2.2'
+__version__ = '4.2.3'
 
 
 conf_path = []
@@ -920,6 +920,7 @@ class Product(Material):
     @all_product_time_consuming.setter
     def all_product_time_consuming(self, t):
         self['all_product_time_consuming'] = t
+        self['_all_product_time_consuming'] = fmt_time_delta(t)
 
     @property
     def waiting_time(self):
@@ -927,13 +928,13 @@ class Product(Material):
 
     @property
     def latest_product_timing(self):
-        if self.depth < 0:
-            return self.all_product_time_consuming
-        return self.get('latest_product_timing', self.waiting_time)
+        return self.get('latest_product_timing', self._city.city_timing + self.waiting_time)
 
     @latest_product_timing.setter
     def latest_product_timing(self, t):
+        self.put_off = 0 if t <= self.latest_product_timing else t - self.latest_product_timing
         self['latest_product_timing'] = t
+        self['_latest_product_timing'] = fmt_time(t)
 
 
 class Schedule:

@@ -430,7 +430,7 @@ class Factories(dict):
 class _Arrangement(list):
 
     def __init__(self, product, start, end):
-        super().__init__([start, end, product, start])
+        super().__init__([start, end, product, start, end])
 
     @property
     def start(self):
@@ -451,6 +451,17 @@ class _Arrangement(list):
     @latest_start.setter
     def latest_start(self, t):
         self[3] = t
+
+    @property
+    def latest_end(self):
+        return self[4]
+
+    @latest_end.setter
+    def latest_end(self, t):
+        self[4] = t
+
+    def __repr__(self):
+        return '%s%s(%s/%s-%s/%s)' % ('+'*self.product.depth, self.product, fmt_time(self.start), fmt_time(self.end), fmt_time(self.latest_start + self.product.time_consuming), fmt_time(self.latest_end))
 
 
 class FactoriesSchedule(Schedule):
@@ -536,10 +547,10 @@ class FactorySchedule(Schedule):
                 if _sch.latest_start + product.time_consuming < latest_end:
                     _sch.latest_start = latest_end - product.time_consuming
                 product.latest_product_timing = _sch.latest_start
-                if _sch.start < _sch.latest_start:
-                    logging.debug('%s %s-%s => %s-%s', product, fmt_time(_sch.start), fmt_time(_sch.end), fmt_time(_sch.latest_start), fmt_time(_sch.latest_start + product.time_consuming))
+                _sch.latest_end = latest
                 break
-            latest_end = _sch.latest_start
+            if latest_end > _sch.latest_start:
+                latest_end = _sch.latest_start
 
     def log(self, stdout=False, fact_name=None):
         if len(self._schedule) == 0:
@@ -547,13 +558,7 @@ class FactorySchedule(Schedule):
         _name = '%s' % fact_name if fact_name is not None else self._fact.cn_name
         if self._fact_slot is not None:
             _name += '[%d]' % self._fact_slot
-        if stdout:
-            print_func = print if self._fact is None else self._fact.city.cprint
-            print_func('%s[%s]:' % (_name, fmt_time(self._pending_timing)))
-        else:
-            logging.debug('%s[%s]:' % (_name, fmt_time(self._pending_timing)))
+        print_func = logging.debug if not stdout else print if self._fact is None else self._fact.city.cprint
+        print_func('%s[%s]:' % (_name, fmt_time(self._pending_timing)))
         for _sch in self._schedule:
-            if stdout:
-                print_func('%s(%s-%s)' % (_sch.product, fmt_time(_sch.start), fmt_time(_sch.end)))
-            else:
-                logging.debug('%s(%s-%s)' % (_sch.product, fmt_time(_sch.start), fmt_time(_sch.end)))
+            print_func(_sch)
