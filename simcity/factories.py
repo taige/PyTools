@@ -95,16 +95,6 @@ class Factories(dict):
     def waiting_delete(self, product: Product):
         if self._waiting_del(product.pid):
             product.product_done()
-            if product.depth == 0 and abs(product.batch_id) == product.root.batch_id:
-                del_need = False
-                for i in range(len(product.root.needs)):
-                    n = product.root.needs[i]
-                    if product.cn_name == n:
-                        del product.root.needs[i]
-                        del_need = True
-                        break
-                if not del_need:
-                    self._city.cprint('\x1b[1;37;41m从批次[%d]中删除需求[%s]失败\x1b[0m', product.root.batch_id, product)
             return True
         return False
 

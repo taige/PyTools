@@ -13,7 +13,7 @@ from collections import OrderedDict
 from tsproxy.common import Timeout
 
 
-__version__ = '4.2.3'
+__version__ = '4.2.4'
 
 
 conf_path = []

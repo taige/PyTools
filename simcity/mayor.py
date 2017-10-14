@@ -232,6 +232,7 @@ class Mayor:
             out.write('批次[#%d]尚未完成' % batch_id)
             return
         to_consume = MaterialList(batch.needs)  # 批次消费在原始需求的基础上进行剪裁-
+        pre_cons = False  # ship or cargo can pre-consume one kind material products to release capacity
         if len(args) > 0:
             not_to_consume = None
             if args[0] == '-':
@@ -242,6 +243,7 @@ class Mayor:
                 to_consume = MaterialList()
                 not_found = []
             else:
+                pre_cons = True
                 to_consume, not_found = MaterialList.needs2list(args)
             if len(not_found) > 0:
                 out.write("在产品列表中没有找到 %s" % not_found)
@@ -273,8 +275,10 @@ class Mayor:
                             break
                 _not_consumed.extend(consumed)
                 if len(_not_consumed) > 0:
-                    for n in _not_consumed:
-                        n.batch_id = 0
+                    if not pre_cons:
+                        # normal/fully consume, normalize not_cosumed products
+                        for n in _not_consumed:
+                            n.batch_id = 0
                     self._city.warehouse.extend(_not_consumed)
             else:
                 _consumed = consumed
@@ -291,7 +295,8 @@ class Mayor:
                                                            '' if _unconsumed is None else ', \x1b[1;37;41m缺少了 %s\x1b[0m' % _unconsumed))
             else:
                 out.write('消费批次[#%d]为空' % batch_id)
-            self._city.set_batch_consumed(batch)
+            if not pre_cons:
+                self._city.set_batch_consumed(batch)
         else:
             out.write('消费批次[#%d]失败, 也许不存在该批次' % batch_id)
         self._city.show_city_status(show_all=True, out=out)
@@ -391,7 +396,7 @@ class Mayor:
         if sub_cmd.startswith('{') and args[len(args)-1].endswith('}'):
             sub_cmd = 'set'
         start_dict = {}
-        if sub_cmd not in ('start', 'del', 'delete', 'ware', 'show', 'set'):
+        if sub_cmd not in ('start', 'del', 'delete', 'delneed', 'ware', 'show', 'set'):
             sub_cmd = args.pop(0) if len(args) > 1 else '='
             if sub_cmd not in ('+', '-', '='):
                 self._print_help(out)
@@ -421,21 +426,39 @@ class Mayor:
                     start_dict[_fact] = _start_list
                 _start_list.append(prod)
             elif sub_cmd.startswith('del'):
-                if prod.start_timing >= -1:
+                if sub_cmd in ('del', 'delete') and prod.start_timing >= -1:
                     out.write('产品 %s 已经开始生产, 没法删除' % prod)
                     continue
+                if sub_cmd == 'delneed' and prod.is_done():
+                    out.write('产品 %s 已经完成生产, 没法删除' % prod)
+                    continue
                 to_del = []
-                if sub_cmd == 'delete':
+                if sub_cmd in ('delete', 'delneed'):
                     self._city.batch_to_list(prod.children, to_del)
                 to_del.append(prod)
                 for _del in sorted(to_del, key=lambda d: d.latest_product_timing):
                     if _del.batch_id != prod.batch_id:
                         continue
                     _fact = self._city.factories if _del.is_factory_material else self._city.get_shop(_del.shop_name)
-                    if _fact.waiting_delete(_del):
-                        self._city.cprint('产品 %s 已从生产队列中删除', _del)
+                    if _del.start_timing < -1:
+                        if _fact.waiting_delete(_del):
+                            self._city.cprint('产品 %s 已从生产队列中删除', _del)
+                        else:
+                            out.write('产品 %s 删除失败, 也许没在 %s 的生产队列中' % (_del, _fact.cn_name))
                     else:
-                        out.write('产品 %s 删除失败, 也许没在 %s 的生产队列中' % (_del, _fact.cn_name))
+                        _del.batch_id = 0
+                    if _del.depth == 0 and abs(_del.batch_id) == prod.root.batch_id:
+                        del_need = False
+                        for i in range(len(prod.root.needs)):
+                            n = prod.root.needs[i]
+                            if _del.cn_name == n:
+                                del prod.root.needs[i]
+                                del_need = True
+                                break
+                        if not del_need:
+                            self._city.cprint('\x1b[1;37;41m从批次[%d]中删除需求[%s]失败\x1b[0m', prod.root.batch_id, _del)
+                        else:
+                            self._city.cprint('从批次[%d]中删除需求[%s]', prod.root.batch_id, _del)
             elif sub_cmd == 'ware':
                 if not prod.is_done():
                     out.write('产品 %s 尚未完成生产' % prod)
@@ -524,6 +547,7 @@ class Mayor:
                        self._city.warehouse_capacity, '\n%s%s' % (' ' * 15, MaterialList.to_str(_in_ware, prefix='', suffix='')) if len(_in_ware) > 0 else '',
                        '\n%s\x1b[0;34;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
 
+    # TODO modify(append or delete materials) needs
     _help_message = (
         ('消费库存', 'consume', '2*西瓜 3*面包 ... | BATCH_ID [= | [-] 1*西瓜 1*面包 ...]'),
         ('看/加库存', 'warehouse', '[show [xig] | 2*西瓜 3*面包 ... | [+|-]CAPACITY]'),
