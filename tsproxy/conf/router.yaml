@@ -3,6 +3,7 @@
 # F - forbidden access
 # jp.f ... - connect with the proxy of 'jp.f'
 # not conf - smart connect (cn_ip with D, else with P)
+# foreign_domain copy from https://raw.githubusercontent.com/hellowingy/wingy-announcement/master/Smart.conf
 
 #default: jp.f
 
@@ -13,6 +14,8 @@ forbidden_domain:
         - wup.browser.qq.com
         - better-history.org
         - officeapps.live.com
+        - account.jetbrains.com
+        - www.jetbrains.com
 
 forbidden_app:
     app:
@@ -20,6 +23,8 @@ forbidden_app:
         - Microsoft Excel
         - Microsoft Word
         - Office365ServiceV2
+        - SogouServices
+        - SogouInput
 
 baiduYun:
 #    url: http://www.baidu.com/abc
@@ -30,6 +35,7 @@ baiduYun:
         - ourdvsss.com
         - baijincdn.com
         - jomodns.com
+        - c4hcdn.com
 #    port: 80
 #    path: /ass
 #    method: head
@@ -51,10 +57,18 @@ http_req:
 
 foreign_domain:
     host:
-        - facebook.com
-        - google.com
-        - tumblr.com
-        - twitter.com
+        - k,instagram
+        - k,cdninstagram
+        - k,twitter
+        - k,twimg
+        - k,facebook
+        - k,fbcdn
+        - k,google
+        - s,gstatic.com
+        - k,tumblr
+        - k,dropbox
+        - s,youtube.com
+        - s,ytimg.com
 
 cn_domain:
     host:
@@ -74,6 +88,15 @@ cn_domain:
         - data.flurry.com
         - .zhimg.com
         - youku.com
+        - .ctrip.com
+        - douban.com
+        - .doubanio.com
+        - weibo.com
+        - .macx.cn
+        - .cmbc.com.cn
+        - mobilebj.cn
+        - .sinaimg.cn
+        - sinajs.cn
 
 router:
     - forbidden_app: F

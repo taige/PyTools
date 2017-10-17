@@ -369,13 +369,13 @@ class RouterableConnector(SmartConnector):
                     return _to, _con_name
         return (self.yaml_conf['default'] if 'default' in self.yaml_conf else None), None
 
-    def _match(self, k, v, request, connection):
+    def _match(self, k: str, v: str, request, connection):
         if v[0] == '!':
             return self.__match(k, v[1:], request, connection, True)
         else:
             return self.__match(k, v, request, connection)
 
-    def __match(self, k, v, request, connection, rev=False):
+    def __match(self, k: str, v: str, request, connection, rev=False):
         _m = False
         if k == 'url':
             _m = request.url.full_url.lower().startswith(v.lower())
@@ -385,7 +385,16 @@ class RouterableConnector(SmartConnector):
             elif v.upper() == 'HTTP':
                 _m = request.url.scheme.lower() == v.lower()
         elif k == 'host':
-            _m = request.url.hostname.lower().endswith(v.lower())
+            c = 's'  # p,k,s,r分别表示 prefix (前缀)，keyword(关键词),suffix(后缀),regex(正则表达式/暂不支持)
+            v = v.lower()
+            if ',' in v:
+                c, v = v.split(',', 1)
+            if c == 's':
+                _m = request.url.hostname.lower().endswith(v)
+            elif c == 'p':
+                _m = request.url.hostname.lower().startswith(v)
+            else:
+                _m = v in request.url.hostname.lower()
         elif k == 'port':
             v = v if isinstance(v, int) else int(v)
             _m = request.url.port == v
