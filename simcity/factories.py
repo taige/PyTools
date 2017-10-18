@@ -254,7 +254,7 @@ class Factories(dict):
             if not self.is_busying():
                 product.start_timing = self._city.city_timing
                 self._city.cprint('  %s 开始生产 %s\x1b[1;38;48m%s\x1b[0m%s.%d, 预计耗时 %s', self.cn_name, '' if product.depth > 0 else '\x1b[4;38;48m',
-                                  repr(product), product.consumed_info, self._city.warehouse.capacity, fmt_time_delta(product.time_consuming))
+                                  product, product.consumed_info, self._city.warehouse.capacity, fmt_time_delta(product.time_consuming))
             else:
                 product.start_timing = -1
                 self._city.cprint('  %s 准备生产 %s\x1b[1;38;48m%s\x1b[0m%s.%d', self.cn_name, '' if product.depth > 0 else '\x1b[4;38;48m',

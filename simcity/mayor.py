@@ -1,6 +1,7 @@
 import subprocess
 import json
 
+import simcity
 from simcity import *
 
 
@@ -46,7 +47,7 @@ class Mayor:
         if self.is_online:
             yield from self._connection.close()
         self._connection = _Connection(self, connection)
-        self._city.cprint('\x1b[1;37;48m市长来了\x1b[0m @%s', self._connection)
+        self._city.cprint('\x1b[1;37;48m市长(%s)来了\x1b[0m @%s', simcity.__version__, self._connection)
         try:
             self._city.show_city_status(show_all=True, out=self._connection)
             self._city.wakeup()
@@ -440,6 +441,7 @@ class Mayor:
                     if _del.batch_id != prod.batch_id:
                         continue
                     _fact = self._city.factories if _del.is_factory_material else self._city.get_shop(_del.shop_name)
+                    _del_bid = _del.batch_id
                     if _del.start_timing < -1:
                         if _fact.waiting_delete(_del):
                             self._city.cprint('产品 %s 已从生产队列中删除', _del)
@@ -447,7 +449,7 @@ class Mayor:
                             out.write('产品 %s 删除失败, 也许没在 %s 的生产队列中' % (_del, _fact.cn_name))
                     else:
                         _del.batch_id = 0
-                    if _del.depth == 0 and abs(_del.batch_id) == prod.root.batch_id:
+                    if _del.depth == 0 and abs(_del_bid) == prod.root.batch_id:
                         del_need = False
                         for i in range(len(prod.root.needs)):
                             n = prod.root.needs[i]
@@ -534,17 +536,24 @@ class Mayor:
                       (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
                        self._city.warehouse_capacity, json.dumps(w, indent=2, ensure_ascii=False, sort_keys=True)))
         else:
-            # 未实际入库的商品分开显示
-            _in_fact = []
-            _in_ware = []
+            _in_fact = []  # 未实际入库的商品分开显示
+            _fact_ware = []  # 工厂产品
+            _shop_ware = []  # 商店产品
             for p in self._city.warehouse:
                 if not isinstance(p, Product) or p.in_warehouse:
-                    _in_ware.append(p)
+                    if isinstance(p, str):
+                        p = MaterialDict.get(p)
+                    if p.is_factory_material:
+                        _fact_ware.append(p)
+                    else:
+                        _shop_ware.append(p)
                 else:
                     _in_fact.append(p)
-            out.write('仓库: %d/%d(%d)/(%d)%d%s%s' %
-                      (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse), (self._city['_special_products'] + self._city.warehouse.products_len),
-                       self._city.warehouse_capacity, '\n%s%s' % (' ' * 15, MaterialList.to_str(_in_ware, prefix='', suffix='')) if len(_in_ware) > 0 else '',
+            out.write('仓库: %d/%d(%d)/(%d)%d%s%s%s' %
+                      (self._city.warehouse.capacity, self._city.warehouse.products_len, len(self._city.warehouse),
+                       (self._city['_special_products'] + self._city.warehouse.products_len), self._city.warehouse_capacity,
+                       '\n%s%s' % (' ' * 15, MaterialList.to_str(_fact_ware, prefix='', suffix='')) if len(_fact_ware) > 0 else '',
+                       '\n%s%s' % (' ' * 15, MaterialList.to_str(_shop_ware, prefix='', suffix='')) if len(_shop_ware) > 0 else '',
                        '\n%s\x1b[0;34;46m%s\x1b[0m' % (' ' * 15, MaterialList.to_str(_in_fact)) if len(_in_fact) > 0 else ''))
 
     # TODO modify(append or delete materials) needs

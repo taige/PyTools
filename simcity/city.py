@@ -2,6 +2,7 @@ import json
 import platform
 import socket
 
+import simcity
 from simcity import *
 from simcity.factories import Factories
 from simcity.mayor import Mayor
@@ -626,7 +627,7 @@ class SimCity(Listener, dict):
         '''
             city main coroutine, responsibility for the time goes
         '''
-        self.cprint('SimCity[%s] start @%d', self.city_nick_name, self._listen_port)
+        self.cprint('SimCity[%s:%s] start @%d', self.city_nick_name, simcity.__version__, self._listen_port)
         self._recover()
         forward = 0
         nearest_done_time = None

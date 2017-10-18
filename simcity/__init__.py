@@ -13,7 +13,7 @@ from collections import OrderedDict
 from tsproxy.common import Timeout
 
 
-__version__ = '4.2.4'
+__version__ = '4.2.6'
 
 
 conf_path = []
@@ -792,10 +792,15 @@ class Product(Material):
         # -2 满足排产条件但未排产
         # -1 已安排生产（仅shop里待生产物品有效）
         # >=0 开始生产时间
-        return self['start_timing'] if 'start_timing' in self else -3
+        t = self['start_timing'] if 'start_timing' in self else -3
+        if t >= 0 and '_start_timing' not in self:
+            self['_start_timing'] = fmt_city_timing(t)
+        return t
 
     @start_timing.setter
     def start_timing(self, t):
+        if t >= 0:
+            self['_start_timing'] = fmt_city_timing(t)
         self['start_timing'] = t
 
     @property
