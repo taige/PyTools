@@ -115,8 +115,8 @@ class Factories(dict):
         for i in range(len(self._factory), self.slot):
             self._factory.append(None)
 
-    def adjust_time_consuming(self, time_consuming, start_timing):
-        _time_consuming = int(self.stars_speed_up * time_consuming)
+    def speed_up_timing(self, time_consuming, start_timing):
+        _time_consuming = time_consuming
         if 0 <= start_timing < self.speed_up_end_timing and (self.speed_up_start_timing - start_timing) < _time_consuming:
             if start_timing < self.speed_up_start_timing:
                 _normal_time = self.speed_up_start_timing - start_timing
@@ -130,7 +130,7 @@ class Factories(dict):
                     _time_consuming -= _speed_up_duration * (self.speed_up_times - 1)
                 else:
                     _time_consuming /= self.speed_up_times
-        return _time_consuming
+        return time_consuming - round(_time_consuming)
 
     def set_times_speed_up(self, times=2, duration=3600, start_timing=None):
         if self.speed_up_end_timing >= (start_timing if start_timing is not None else self._city.city_timing):

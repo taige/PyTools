@@ -437,14 +437,25 @@ class SimCity(Listener, dict):
             return -1
         if p1.is_factory_material and not p2.is_factory_material:
             return 1
-        # 按照排产时间
-        o = p1.latest_product_timing - p2.latest_product_timing
-        if o != 0:
-            return o
-        # prod_type 越大越优先
-        o = p2.prod_type - p1.prod_type
-        if o != 0:
-            return o
+        if p1.latest_product_timing > self.city_timing < p2.latest_product_timing:
+            # 超过既定生产时间的话，批次类型优先
+            # prod_type 越大越优先
+            o = p2.prod_type - p1.prod_type
+            if o != 0:
+                return o
+            # 按照排产时间
+            o = p1.latest_product_timing - p2.latest_product_timing
+            if o != 0:
+                return o
+        else:
+            # 按照排产时间
+            o = p1.latest_product_timing - p2.latest_product_timing
+            if o != 0:
+                return o
+            # prod_type 越大越优先
+            o = p2.prod_type - p1.prod_type
+            if o != 0:
+                return o
         # 优先生产最底层的原料
         o = p2.depth - p1.depth
         if o != 0:

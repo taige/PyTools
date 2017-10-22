@@ -13,7 +13,7 @@ from collections import OrderedDict
 from tsproxy.common import Timeout
 
 
-__version__ = '4.2.6'
+__version__ = '4.2.7'
 
 
 conf_path = []
@@ -661,7 +661,28 @@ class Product(Material):
                     _factory = self._city.get_shop(self.shop_name)
                 else:
                     _factory = self._city.factories
-                return _factory.adjust_time_consuming(self._material.time_consuming, start_timing)
+                _time_consuming = time_consuming = round(_factory.stars_speed_up * self._material.time_consuming)
+                _start_timing = start_timing
+                if '_speed_up_timing' in self:
+                    if self['_speed_up_end_timing'] != _factory.speed_up_end_timing:
+                        _start_timing = self['_speed_up_end_timing']
+                        _time_consuming = self['_time_left_on_speed_up_end']
+                    else:
+                        return time_consuming - self['_speed_up_timing']
+                if 0 <= _start_timing < _factory.speed_up_end_timing and (_factory.speed_up_start_timing - _start_timing) < _time_consuming:
+                    # 在加速时间段, 计算加速了多少时间
+                    _speed_up_timing = _factory.speed_up_timing(_time_consuming, _start_timing)
+                    self['_speed_up_end_timing'] = _factory.speed_up_end_timing
+                    if '_speed_up_timing' in self:
+                        self['_speed_up_timing'] += _speed_up_timing
+                        logging.debug('%s 又加速了 %s, 总共加速 %s', self, fmt_time_delta(_speed_up_timing), fmt_time_delta(self['_speed_up_timing']))
+                    else:
+                        self['_speed_up_timing'] = _speed_up_timing
+                        logging.debug('%s 加速了 %s', self, fmt_time_delta(_speed_up_timing))
+                    eta = self.start_timing + (time_consuming - self['_speed_up_timing'])
+                    self['_time_left_on_speed_up_end'] = max(0, eta - _factory.speed_up_end_timing)
+                    logging.debug('加速结束时(%s) %s 的生产时间还剩 %s', fmt_city_timing(_factory.speed_up_end_timing), self, fmt_time_delta(self['_time_left_on_speed_up_end']))
+                return time_consuming - self.get('_speed_up_timing', 0)
             else:
                 return self._material.time_consuming
         else:
@@ -772,7 +793,7 @@ class Product(Material):
     @property
     def prod_type_icon(self):
         # 🏠✈️🚢👤💰
-        return '✈️' if self.prod_type == Product.PT_CARGO_AIR else \
+        return '✈️ ' if self.prod_type >= Product.PT_CARGO_AIR else \
             '🚢' if self.prod_type == Product.PT_CARGO_SHIP else \
             '👤' if self.prod_type == Product.PT_NPC else \
             '💰' if self.prod_type == Product.PT_SELL else '︎🏠'
@@ -933,7 +954,7 @@ class Product(Material):
 
     @property
     def latest_product_timing(self):
-        return self.get('latest_product_timing', self._city.city_timing + self.waiting_time)
+        return self['latest_product_timing'] if 'latest_product_timing' in self else self._city.city_timing + self.waiting_time
 
     @latest_product_timing.setter
     def latest_product_timing(self, t):
