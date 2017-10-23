@@ -172,7 +172,7 @@ class HttpListener(Listener):
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, 'Dns(%s) fail(TSP)' % host))
             return False
         except ConnectionError as ex:
-            logger.warning("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, ex.__class__.__name__, ex)
+            logger.info("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, ex.__class__.__name__, ex)
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, '%s(TSP)' % ex.strerror))
             return False
         except BaseException as ex:

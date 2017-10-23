@@ -318,15 +318,15 @@ def dns_query(qname, raise_on_fail=False, local_dns=False, in_cache=False):
                 return ipv4
         except (NoAnswer, NXDOMAIN, Timeout) as noa:
             ex = noa
-        logger.log(logging.WARN, 'opendns lookup %s failed, try local lookup (used %.2f sec)', qname, (time.time() - query_start))
+        logger.log(logging.INFO, 'opendns lookup %s failed, try local lookup (used %.2f sec)', qname, (time.time() - query_start))
     try:
         ipv4 = socket.gethostbyname(qname)
         dns_cache[qname] = ipv4
         if ex is not None:
-            logger.warning('local lookup result: %s => %s for (%s:%s)', qname, ipv4, ex.__class__.__name__, ex)
+            logger.info('local lookup result: %s => %s for (%s:%s)', qname, ipv4, ex.__class__.__name__, ex)
         else:
             used = time.time() - query_start
-            logger.log(logging.INFO if used < 1 else logging.WARN, 'local lookup %s => %s used %.2f sec', qname, ipv4,
+            logger.log(logging.DEBUG if used < 1 else logging.INFO, 'local lookup %s => %s used %.2f sec', qname, ipv4,
                        used)
         return ipv4
     except BaseException as ex:
