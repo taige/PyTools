@@ -590,21 +590,21 @@ class ProxyHolder(object):
             hp = self.try_select_head_proxy(force_to_head=True, only_select=True)
             if hp is not None:
                 move_tail = True
-                self.move_head_to_tail(head_proxy, logging.INFO, "fail_rate=%.1f%% > %.1f%%",
+                self.move_head_to_tail(head_proxy, logging.WARNING, "fail_rate=%.1f%% > %.1f%%",
                                        fail_rate*100, common.fail_rate_threshold*100)
         elif global_tp90 > 0 and (head_proxy.tp90/global_tp90) > common.global_tp90_threshold:
             # when head proxy's tp90 greater than global tp90 1.1x, try cut it
             hp = self.try_select_head_proxy(force_to_head=True, only_select=True)
             if hp is not None:
                 move_tail = True
-                self.move_head_to_tail(head_proxy, logging.INFO, "tp90=%.1f > (global_tp90=%.1f[%s] x %d)",
+                self.move_head_to_tail(head_proxy, logging.WARNING, "tp90=%.1f > (global_tp90=%.1f[%s] x %d)",
                                        head_proxy.tp90, global_tp90, ProxyStat.get_global_tp90_inc(), common.global_tp90_threshold)
         elif tp90_inc_percent >= common.tp90_inc_threshold:
             # tp90 increment greater than 50%
             hp = self.try_select_head_proxy(only_select=True, tp90_factor=1.0)
             if hp is not None:
                 move_tail = True
-                self.move_head_to_tail(head_proxy, logging.INFO, "tp90_inc(%.1f->%.1f +%.1f%% > %.1f%%)",
+                self.move_head_to_tail(head_proxy, logging.WARNING, "tp90_inc(%.1f->%.1f +%.1f%% > %.1f%%)",
                                        last_tp90, head_proxy.tp90, tp90_inc_percent*100, common.tp90_inc_threshold*100)
             # else:
             #     logger.info("HEAD%s tp90_inc(%.1f->%.1f +%.1f%% > %.1f%%), but no proxy(%s) little than it :(",
@@ -614,7 +614,7 @@ class ProxyHolder(object):
             hp = self.try_select_head_proxy(only_select=True, tp90_factor=global_tp90/head_proxy.tp90)
             if hp is not None:
                 move_tail = True
-                self.move_head_to_tail(head_proxy, logging.INFO, "sort_key_dec(%d->%d -%.1f%% > %.1f%%)",
+                self.move_head_to_tail(head_proxy, logging.WARNING, "sort_key_dec(%d->%d -%.1f%% > %.1f%%)",
                                        last_sort_key, head_proxy.sort_key, sort_key_dec*100, common.tp90_inc_threshold*100)
         if move_tail:
             head_proxy = self.head_proxy
