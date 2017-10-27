@@ -297,6 +297,12 @@ class SimCity(Listener, dict):
 
     def set_batch_consumed(self, batch: Product):
         batch.consumed = True
+        if batch.prod_type == Product.PT_CARGO_AIR:
+            # 航运奖励的特殊商品自动入库
+            self.products_capacity += -1
+        if batch.specials > 0:
+            # 自动减去特殊商品的库存
+            self.products_capacity += batch.specials
         self.wakeup()
 
     def shop_setting(self, shop, ext_slot=0, stars=-1):
@@ -319,18 +325,29 @@ class SimCity(Listener, dict):
         b = self.get_batch(batch_id)
         return b.is_done() if b is not None else True
 
-    def get_product(self, pid, include_warehouse=True, exact_pid=True) -> Product:
+    def get_product(self, pid, include_warehouse=True, exact_pid=True, batch_id=None) -> Product:
         for p in self._producting_batch:
             if p.pid == pid or (not exact_pid and (p.pid % 1000) == pid):
-                return p
-            c = p.get_child(pid)
+                if batch_id is None or batch_id == p.batch_id:
+                    return p
+            c = p.get_child(pid, batch_id=batch_id)
             if c is not None:
                 return c
         if not include_warehouse:
             return None
         for w in self.warehouse:
             if isinstance(w, Product) and (w.pid == pid or (not exact_pid and (w.pid % 1000) == pid)):
-                return w
+                if batch_id is None or batch_id == w.batch_id:
+                    return w
+        return None
+
+    def find_product(self, name, ret_prods: list, not_in_batch) -> Product:
+        for p in self._producting_batch:
+            if p.batch_id == not_in_batch:
+                continue
+            c = p.find_child(name, ret_prods)
+            if c is not None:
+                return c
         return None
 
     def batch_to_list(self, chain, waiting_list=None):
@@ -384,15 +401,17 @@ class SimCity(Listener, dict):
                     if prod.is_done():
                         if _done_ != '':
                             _done_ += '\n%s' % (' ' * 23)
-                        _done_ += '#%d: %s %s \x1b[1;31;48m[ ✔︎ ]\x1b[0m' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False))
+                        _done_ += '#%-2d: %s %s%s \x1b[1;31;48m[ ✔︎ ]\x1b[0m' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False, suffix=''),
+                                                                                 ']' if prod.specials == 0 else (', %d*👜]' % prod.specials))
                         continue
                     if _needs_ != '':
                         _needs_ += '\n%s' % (' ' * 23)
                     _undone = prod.get_undone_list()
                     _warehouse_undone = len(prod.needs - self.warehouse)  # 如果仓库商品满足需求即显示标识✔︎
-                    _needs_ += '#%d: %s %s 待完成: [\x1b[0;34;46m%s\x1b[0m]%s (%d)' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False),
-                                                                                    MaterialList.to_str(_undone, prefix='', suffix=''),
-                                                                                    ' \x1b[1;35;48m[ ✔︎ ]\x1b[0m' if _warehouse_undone == 0 and not prod.is_for_sell else '', prod.pid)
+                    _needs_ += '#%-2d: %s %s%s 待完成: [\x1b[0;34;46m%s\x1b[0m]%s (%d)' % (prod.batch_id, prod.prod_type_icon, MaterialList.to_str(prod.needs, sort_by_count=False, suffix=''),
+                                                                                        ']' if prod.specials == 0 else (', %d*👜]' % prod.specials),
+                                                                                        MaterialList.to_str(_undone, prefix='', suffix=''),
+                                                                                        ' \x1b[1;35;48m[ ✔︎ ]\x1b[0m' if _warehouse_undone == 0 and not prod.is_for_sell else '', prod.pid)
                 if _done_ != '':
                     self.cprint('    完成需求: %s', _done_, out=out)
                 if _needs_ != '':
@@ -437,7 +456,7 @@ class SimCity(Listener, dict):
             return -1
         if p1.is_factory_material and not p2.is_factory_material:
             return 1
-        if p1.latest_product_timing > self.city_timing < p2.latest_product_timing:
+        if p1.latest_product_timing < self.city_timing > p2.latest_product_timing:
             # 超过既定生产时间的话，批次类型优先
             # prod_type 越大越优先
             o = p2.prod_type - p1.prod_type
@@ -720,7 +739,7 @@ class SimCity(Listener, dict):
         self.dump()
         self.cprint('SimCity[%s] closed', self.city_nick_name)
 
-    def arrange_materials_to_product(self, material_list, prod_type=Product.PT_BUILDING, expect_done_time=0):
+    def arrange_materials_to_product(self, material_list, prod_type=Product.PT_BUILDING, expect_done_time=0, specials=0):
         '''组装物料生产链并排产'''
         self['_product_batch_no'] += 1
         if self['_product_batch_no'] >= 100:
@@ -731,6 +750,8 @@ class SimCity(Listener, dict):
 
         warehouse_will_used = []  # 仓库中的现成的产品
         product_chain, schedules = self.compose_product_chain(self.product_batch_no, material_list, warehouse_will_used, prod_type=prod_type, expect_done_time=expect_done_time)
+        if specials > 0:
+            product_chain.specials = specials
 
         if len(warehouse_will_used) > 0:
             self.warehouse.extend(warehouse_will_used)  # 先放回仓库中（已经打上批次号，不会被其他批次使用）
@@ -769,7 +790,7 @@ class SimCity(Listener, dict):
         for m_name in material_list:
             material = MaterialDict.get(m_name)
             _warehouse_consumed = []
-            try_warehouse = material.all_product_time_consuming >= expect_done_time
+            try_warehouse = True  # material.all_product_time_consuming >= expect_done_time
             if try_warehouse and parent_chain.use_warehouse and self.warehouse.consume(material, batch_id=parent_chain.batch_id, consumed=_warehouse_consumed):
                 if isinstance(_warehouse_consumed[0], Product):
                     _warehouse_consumed[0].batch_id = parent_chain.batch_id if depth > 0 else -parent_chain.batch_id

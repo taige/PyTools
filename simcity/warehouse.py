@@ -99,7 +99,7 @@ class Warehouse(MaterialList):
             if p_batchid == 0:
                 _str_ += '%s' % MaterialList.to_str(_batch_cache[p_batchid], prefix='', suffix='')
             else:
-                _str_ += '#%d:' % p_batchid
+                _str_ += '#%-2d:' % p_batchid
                 if -p_batchid in _batch_cache:
                     _str_ += '[\x1b[1;38;46m%s\x1b[0m' % MaterialList.to_str(_batch_cache[-p_batchid], prefix='', suffix='')
                 else:

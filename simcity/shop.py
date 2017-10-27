@@ -56,11 +56,15 @@ class Shop(Factories):
                 if c is None:
                     # 在当前product下找不到的话，在批次内找
                     c = product.root.find_child(p.cn_name, ret_prods)
+                if c is None:
+                    # 全局查找
+                    c = self.city.find_product(p.cn_name, ret_prods, not_in_batch=product.batch_id)
                 if c is not None:
                     _log = '生产[%s]使用了批次[%d]的原料[%s.%d]，将[%s]归还给原批次' % (product, p.batch_id, p, p.depth, c)
                     c.batch_id = abs(p.batch_id)
                     c.depth = p.depth
                     c.prod_type = p.prod_type
+                    c.latest_product_timing = p.latest_product_timing
                     logging.info(_log + ('=>[%s.%d]' % (c, c.depth)))
                     ret_prods.append(c.pid)
                 else:
@@ -103,17 +107,23 @@ class Shop(Factories):
                 _arrange_str += '..'
                 continue
             p = self._producting(pid)
+            clr = False
             if pid < 0:
                 _arrange_str += '\x1b[0;34;46m'
+                clr = True
+            elif p.time_to_done > 0 and '_speed_up_timing' in p and p['_speed_up_end_timing'] > self.city.city_timing and batch_id == 0:
+                _arrange_str += '\x1b[1;33;48m'
+                clr = True
             if p.depth == 0:
                 _arrange_str += '\x1b[4;38;48m'
+                clr = True
             if batch_id == 0 or p.batch_id == batch_id:
                 _arrange_str += '%s' % (p if batch_id != 0 else repr(p))
-            if p.depth == 0 or pid < 0:
+            if clr:
                 _arrange_str += '\x1b[0m'
         _arrange_str += ']'
-        if self.speed_up_end_timing > self._city.city_timing and batch_id == 0:
-            _arrange_str = '\x1b[1;33;48m%s\x1b[0m' % _arrange_str
+        # if self.speed_up_end_timing > self._city.city_timing and batch_id == 0:
+        #     _arrange_str = '\x1b[1;33;48m%s\x1b[0m' % _arrange_str
         return _arrange_str
 
 

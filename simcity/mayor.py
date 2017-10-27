@@ -404,8 +404,12 @@ class Mayor:
                 return
             time_delta = str2time(args.pop(0))
         for s_pid in pids:
+            bid = None
+            if '.' in s_pid:
+                s_bid, s_pid = s_pid.split('.', 1)
+                bid = int(s_bid)
             pid = int(s_pid)
-            prod = self._city.get_product(pid, exact_pid=False)
+            prod = self._city.get_product(pid, exact_pid=False, batch_id=bid)
             if prod is None:
                 out.write('没有找到编号为 %d 的产品' % pid)
                 continue
@@ -563,15 +567,15 @@ class Mayor:
         ('时间快进', 'forward', '[N]'),
         ('工厂设置', 'fact', '[ware | slot [1]]'),
         ('商店设置', 'shop', '[建材店|jcd [ware | slot [1] | speed [2 [3600] | star [1]]]'),
-        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; delete 删除待产商品及children; ware 移入仓库; time_delta 调整完成时间
-        ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | ware | {json} | TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
+        # start 强制生产指定产品(忽略仓库容量); del 删除待产商品; delete 删除待产商品及children; delneed 删除根需求商品(已排产); ware 移入仓库; time_delta 调整完成时间
+        ('生产设置', 'prod', 'PID[,PID1,...] [show] | start | del[ete] | delneed | ware | {json} | TIME_DELTA \x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m'),
         ('通知中心', 'nfc', '[on | off]'),
         ('自动入库', 'auto_ware', '[on | off]'),
         ('二次确认', 'confirm', '[N]'),
         ('查看城市', 'show', '[c(ity)\x1b[3;38;48m(default)\x1b[0m | m(aterial)[s|v|vp|pp] [西瓜 | xig ...] | p(roducting)]'),
         ('保存城市', 'dump', '[xxx.json]'),
         ('从头生产', '++', '2*西瓜 3*面包 ... [; 1*shab 3*muc ...]'),
-        ('生产', '+', '[--air | --npc | --ship] [--TIME_DELTA\x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m] 2*西瓜 3*面包 ... [; 1*shab 3*muc ...]')
+        ('生产', '+', '[--air | --npc | --ship] [--sp=N] [--TIME_DELTA\x1b[3;38;48m(format: 1h1m1s or 1:1:1)\x1b[0m] 2*西瓜 3*面包 ... [; 1*shab 3*muc ...]')
     )
 
     def _print_help(self, out):
@@ -682,7 +686,7 @@ class Mayor:
             # + --air | --npc | --ship 指定生产目的
             needs_list = cmd_line.split(cmd, 1)[1].strip().split(';')
             prod_type = Product.PT_SELL if cmd == '++' else Product.PT_BUILDING
-            expect_done_time = 0
+            expect_done_time = specials = 0
             for needs in needs_list:
                 while needs.startswith('--'):
                     _prod_type, needs = needs.strip().split(None, 1)
@@ -694,6 +698,8 @@ class Mayor:
                         prod_type = Product.PT_CARGO_SHIP
                     elif _prod_type == '--npc':
                         prod_type = Product.PT_NPC
+                    elif _prod_type.startswith('--sp='):  # special materials will consumed
+                        specials = int(_prod_type[5:])
                     else:
                         expect_done_time = str2time(_prod_type[2:])
                 material_list, not_found = MaterialList.needs2list(needs)
@@ -707,7 +713,7 @@ class Mayor:
                     continue
                 # backup whole city, for recover if wrong product arrangement
                 self._city.dump(file='city_backup/simcity_%s-%d.json' % (self._city.city_nick_name, self._city.product_batch_no))
-                self._city.arrange_materials_to_product(material_list, prod_type=prod_type, expect_done_time=expect_done_time)
+                self._city.arrange_materials_to_product(material_list, prod_type=prod_type, expect_done_time=expect_done_time, specials=specials)
             # self._city.wakeup()  # not wakeup for wait more needs input
         else:
             self._print_help(out)
