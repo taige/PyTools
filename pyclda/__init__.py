@@ -10,6 +10,7 @@ import os
 import signal
 import sys
 import time
+import platform
 from concurrent.futures import CancelledError
 from urllib.parse import urlparse
 
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 SCR_ROWS = None
 SCR_COLS = None
+
+md5_executor = None
 
 
 def count_rows(string, cols=10):
@@ -729,6 +732,10 @@ def get_filenames(url, out_file):
 
 
 async def await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop=None):
+    global md5_executor
+
+    if loop is None:
+        loop = asyncio.get_event_loop()
     if len(futures) > 0:
         while True:
             try:
@@ -767,7 +774,13 @@ async def await_status(done, status, futures, url, out_file, method, _out_file, 
             logger.warning('save to %s', _out_file)
         if status['con_md5'] is not None:
             logger.warning('server md5: %s, calculating local file md5...', status['con_md5'])
-            _md5 = MD5(_out_file)
+
+            def _async_md5():
+                return MD5(_out_file)
+
+            if md5_executor is None:
+                md5_executor = MyThreadPoolExecutor(max_workers=os.cpu_count(), pool_name='md5-helper')
+            _md5 = await loop.run_in_executor(md5_executor, _async_md5)
             if _md5.lower() != status['con_md5'].lower():
                 logger.warning('local file md5: %s', _md5)
             else:
@@ -804,6 +817,9 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
     if session is None:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True), conn_timeout=conn_timeout, loop=loop) as session:
             return await aio_download(session, url, out_file, method, n=n, index=index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
+
+    if loop is None:
+        loop = asyncio.get_event_loop()
 
     start = time.time()
     if 'headers' in kwargs:
@@ -980,7 +996,7 @@ def MD5(filename, block_size=10240):
     return md5.hexdigest()
 
 
-def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http_proxy=None, n=0, read_timeout=58, conn_timeout=5, loop=None, **kwargs):
+def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=None, http_proxy=None, n=0, read_timeout=58, conn_timeout=5, conc=False, loop=None, **kwargs):
     dict_headers = {}
     if user_agent:
         dict_headers['User-Agent'] = user_agent.strip()
@@ -996,7 +1012,7 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    async def _d(post_data=None, **kw_args):
+    async def _d(url, post_data=None, **kw_args):
         data = None
         if post_data is not None:
             data = formdata.FormData()
@@ -1004,7 +1020,7 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
                 _kv = _data.split('=', 1)
                 if len(_kv) == 2:
                     data.add_field(_kv[0], _kv[1])
-        return await aio_download(
+        done, _out_file = await aio_download(
             session=None,
             url=url,
             out_file=out_file,
@@ -1018,6 +1034,8 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
             proxy=http_proxy,
             **kw_args
         )
+        os.system('tput -Txterm bel')
+        return done, _out_file
 
     def term_handler(_signum):
         if _signum == signal.SIGQUIT:
@@ -1036,7 +1054,16 @@ def main_entry(*headers, url, out_file=None, method='GET', user_agent=None, http
         loop.add_signal_handler(signum, term_handler, signum)
 
     try:
-        loop.run_until_complete(_d(**kwargs))
+        futures = []
+        for url in urls:
+            if conc:
+                futures.append(_d(url, **kwargs))
+            else:
+                loop.run_until_complete(_d(url, **kwargs))
+        if len(futures) > 0:
+            loop.run_until_complete(asyncio.gather(*futures, loop=loop))
+        if platform.system() == 'Darwin':
+            os.system('osascript -e \'display notification "PyCLDA DONE" with title "PyCLDA"\'')
     except CancelledError:
         pass
     except BaseException as ex:
@@ -1154,6 +1181,8 @@ def args_parse(*args):
                         help="use curses progress indicator")
     parser.add_argument('-m', dest='method', default='GET',
                         help="set http method, default is GET")
+    parser.add_argument('-c', dest='conc', default=False, action='store_true',
+                        help="concurrency download urls, default is false")
     parser.add_argument('--post_data', dest='post_data',
                         help="Use POST as the method for all HTTP requests and send the specified data in the request body")
     parser.add_argument('--conn_timeout', dest='conn_timeout', default=5, type=int,
@@ -1163,7 +1192,7 @@ def args_parse(*args):
     parser.add_argument('--baidu', default=False, action='store_true',
                         help="auto set baiduYun request headers")
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0)
-    parser.add_argument('url')
+    parser.add_argument('urls', nargs='+')
 
     kwargs = vars(parser.parse_args(None if args is None or len(args) == 0 else args))
     headers = kwargs.pop('headers')
