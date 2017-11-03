@@ -297,7 +297,7 @@ class SimCity(Listener, dict):
 
     def set_batch_consumed(self, batch: Product):
         batch.consumed = True
-        if batch.prod_type == Product.PT_CARGO_AIR:
+        if 10 > batch.prod_type >= Product.PT_CARGO_AIR:
             # 航运奖励的特殊商品自动入库
             self.products_capacity += -1
         if batch.specials > 0:
@@ -337,7 +337,7 @@ class SimCity(Listener, dict):
             return None
         for w in self.warehouse:
             if isinstance(w, Product) and (w.pid == pid or (not exact_pid and (w.pid % 1000) == pid)):
-                if batch_id is None or batch_id == w.batch_id:
+                if batch_id is None or batch_id == abs(w.batch_id):
                     return w
         return None
 

@@ -39,7 +39,7 @@ class Warehouse(MaterialList):
         needs = [*material_list]
         if consumed is None:
             consumed = []
-        for prod in sorted(self, key=lambda p: float('%d.%d' % (-p.batch_id, p.pid)) if isinstance(p, Product) and (p.batch_id == batch_id or p.batch_id == 0) else 1 if not isinstance(p, Product) else 2):
+        for prod in sorted(self, key=lambda p: float('%d.%d%d' % (-p.batch_id, 9 if p.in_warehouse else 0, p.pid)) if isinstance(p, Product) and (p.batch_id == batch_id or p.batch_id == 0) else 1 if not isinstance(p, Product) else 2):
             if len(material_list) == 0:
                 if not isinstance(prod, Product):
                     continue
