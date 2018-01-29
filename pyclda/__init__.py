@@ -1032,6 +1032,7 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
             headers=dict_headers,
             data=data,
             proxy=http_proxy,
+            skip_auto_headers=('Accept-Encoding', 'Accept'),
             **kw_args
         )
         os.system('tput -Txterm bel')

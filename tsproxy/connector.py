@@ -257,8 +257,6 @@ class RouterableConnector(SmartConnector):
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
         request = kwargs['request'] if 'request' in kwargs else None
         if proxy_name is None and request is not None:
-            if topendns.is_local(target_host):
-                return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
             proxy_name, condition = self.get_proxy_name(request, peer)
             if proxy_name is not None:
                 if proxy_name == 'F':
@@ -268,6 +266,8 @@ class RouterableConnector(SmartConnector):
                     return (yield from self.proxy_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
                 elif proxy_name == 'D':
                     return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
+            elif topendns.is_local(target_host):
+                return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, **kwargs))
 
     def load_yaml_conf(self):
