@@ -214,11 +214,27 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
 
 
 def main():
+    import time
     kwargs, hostnames = args_parse()
     pid = os.fork()
     if pid == 0:
         os.setsid()
-        startup(*hostnames, **kwargs)
+        for i in range(0, 100):
+            pid = os.fork()
+            if pid == 0:
+                os.setsid()
+                startup(*hostnames, **kwargs)
+                os._exit(0)
+            else:
+                print('#%d MONITOR PROXY_PROCESS %d... ' % (i, pid), flush=True)
+                _, rc = os.waitpid(pid, 0)
+                print('#%d PROXY PROCESS %d QUIT WITH %d ... ' % (i, pid, rc), flush=True)
+                if rc == 0 and not os.path.exists(kwargs['pid_file']):
+                    print('#%d QUIT MONITOR' % i, flush=True)
+                    break
+                else:
+                    print('#%d RESTART PROXY PROCESS...' % i, flush=True)
+                    time.sleep(1)
 
 
 if __name__ == '__main__':

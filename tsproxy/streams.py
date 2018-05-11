@@ -39,7 +39,7 @@ def start_connection(handler, host=None, port=None, *, loop=None, encoder=None, 
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         else:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(False)
         logger.debug('connecting (%s/%s:%d) ...', host, ip, port)
         with common.Timeout(connect_timeout-used):

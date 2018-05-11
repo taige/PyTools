@@ -560,9 +560,9 @@ class Proxy(ProxyStat):
 
     def print_info(self, index=None, force_print=True, out=None):
         if self.total_count > 0 or self.proxy_count > 0 or force_print:
-            output = "PROXY%s<%s://%-4s:%-5d tp90=%.1f/%d count=%d/f%.1f%%//%d/f%.1f%%%s>" % \
+            output = "PROXY%s<%s://%-4s:%-5d tp90=%.1f/%d count=%s/f%.1f%%//%d/f%.1f%%%s>" % \
                   ('' if index is None else '[%2d]' % index, self.protocol, self.short_hostname, self.port, self.tp90,
-                   self.tp90_len, self.proxy_count if self.total_count == 0 else self.total_count,
+                   self.tp90_len, format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
                    100*(0 if self.total_count == 0 else self.total_fail/self.total_count),
                    self.proxy_count, 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count),
                    '%s%s%s' % ('' if self.down_speed == 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
@@ -620,6 +620,10 @@ class Proxy(ProxyStat):
 
     @resolved_addr.setter
     def resolved_addr(self, addr):
+        if 'resolved_addr' in self:
+            if addr[0] != self['resolved_addr'][0]:  # ip 有变更，重置统计数据
+                self.total_count = self.proxy_count
+                self.total_fail = self.fail_count
         self['resolved_addr'] = addr
 
     @property
