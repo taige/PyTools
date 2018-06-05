@@ -2,7 +2,10 @@
 
 import argparse
 import asyncio
-import curses
+try:
+    import curses
+except:
+    pass
 import functools
 import logging
 import math
