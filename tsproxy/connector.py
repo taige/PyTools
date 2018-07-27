@@ -120,7 +120,7 @@ class ProxyConnector(Connector):
 
     @asyncio.coroutine
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
-        timeout = time.time() + common.default_timeout
+        timeout = time.time() + kwargs.pop('connect_timeout', common.default_timeout)
         proxy_count = self.proxy_holder.psize
         if proxy_count <= 0:
             raise Exception('NO FOUND PROXY CONFIG')
@@ -266,6 +266,14 @@ class RouterableConnector(SmartConnector):
                     return (yield from self.proxy_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
                 elif proxy_name == 'D':
                     return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
+                else:
+                    # 对于指定代理服务器的规则，如果代理服务器不可用，则用默认代理尝试连接一次，并禁止该规则5分钟
+                    try:
+                        return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, connect_timeout=3, **kwargs))
+                    except (asyncio.TimeoutError, socket.gaierror, ConnectionError) as ex:
+                        logger.info('pause router: %s casue %s', condition, ex)
+                        self.yaml_conf[condition + '.pause'] = time.time()
+                        return (yield from self.proxy_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
             elif topendns.is_local(target_host):
                 return (yield from self.direct_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))
         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, **kwargs))
@@ -348,6 +356,13 @@ class RouterableConnector(SmartConnector):
                 _to = _r[_con_name]
                 if _con_name not in self.yaml_conf:
                     continue
+                pause_key = _con_name + '.pause'
+                if pause_key in self.yaml_conf:
+                    if (time.time() - self.yaml_conf[pause_key]) <= 5*60:
+                        continue
+                    else:
+                        logger.info('delete pause router: %s', _con_name)
+                        del self.yaml_conf[pause_key]
                 _con = self.yaml_conf[_con_name]
                 _con_match = True
                 for k in _con:
