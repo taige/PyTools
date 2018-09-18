@@ -392,7 +392,7 @@ class ManageableHttpListener(HttpListener):
             res = conn.get_attr(HTTP_RESPONSE)
             code = '%d(%s)' % (res.code, res.reason) if res is not None else ''
             recv_len = conn.get_attr(HTTP_RESPONSE_CONTENT_LENGTH)
-            recv_info = ('%s/%s' % (recv_len, res.content_length)) if res and recv_len and res.content_length else ''
+            recv_info = ('%.1f%%(%s/%s)' % (recv_len*100/res.content_length, recv_len, res.content_length)) if res and recv_len and res.content_length else ''
             out.write('%14shandling %s %s %s %s\r\n\r\n' % ('', r, code, recv_info,
                                                             ('"%s".%d' % (conn['process_name'], conn['process_pid'])) if 'process_name' in conn else ''))
             i += 1
