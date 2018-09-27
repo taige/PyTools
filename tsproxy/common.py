@@ -427,7 +427,7 @@ class MyThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
 
 def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, on_data_recv=None, on_idle=None):
     idle_count = 0
-    idle_start = time.time()
+    # idle_start = time.time()
     first_response_time = None
     while True:
         try:
@@ -442,7 +442,7 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
                 peer_conn.writer.write(data)
                 yield from peer_conn.writer.drain()
                 forward_log(logger, connection, peer_conn, data)
-                idle_start = time.time()
+                # idle_start = time.time()
                 idle_count = 0
             else:
                 break
@@ -450,7 +450,7 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
             logger.info("forward_forever(%s) %s: %s", connection, conn_err.__class__.__name__, conn_err)
             break
         except asyncio.TimeoutError:
-            idle_time = time.time() - idle_start
+            idle_time = connection.idle_time  # time.time() - idle_start
             if idle_time > close_on_idle_timeout:
                 logger.debug("%s going to close for idle#%d timeout %.0f seconds", connection, idle_count, idle_time)
                 break
