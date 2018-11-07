@@ -16,8 +16,10 @@
 import os
 import sys
 
-__all__ = ['lookup_conf_file']
+__all__ = ['lookup_conf_file', '__version__']
 
+
+__version__ = "1.0.181030.3"
 
 conf_path = []
 

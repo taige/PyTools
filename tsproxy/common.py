@@ -39,7 +39,7 @@ max_times_fail_rate = 100
 # tp90 increment percent Threshold
 tp90_inc_threshold = 0.5
 # when head proxy's tp90 greater than global tp90 2 times, cut it
-global_tp90_threshold = 1.1
+global_tp90_threshold = 1.9
 # fail rate threshold
 fail_rate_threshold = 0.2
 # response time expired after 3 hour on calc tp90
@@ -258,6 +258,23 @@ class FIFOList(list):
                     size = list.__len__(self)
                 else:
                     break
+        except:
+            pass
+
+    def checkout(self, proxy_name):
+        try:
+            size = list.__len__(self)
+            idx = 0
+            while size > idx:
+                t = list.__getitem__(self, idx)
+                if not hasattr(t, '__call__'):
+                    continue
+                _t, _f, _n = t()
+                if _n == proxy_name:
+                    self.pop(idx)
+                    size = list.__len__(self)
+                else:
+                    idx += 1
         except:
             pass
 

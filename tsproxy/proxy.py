@@ -7,7 +7,10 @@ import time
 from datetime import datetime
 from io import BytesIO
 
-from shadowsocks import encrypt
+try:
+    from shadowsocks.cryptor import Cryptor
+except ImportError:
+    from shadowsocks.encrypt import Encryptor as Cryptor
 
 from tsproxy import httphelper2 as httphelper
 from tsproxy import common, streams, topendns
@@ -496,6 +499,9 @@ class Proxy(ProxyStat):
         else:
             self.json_config = None
 
+        if 'short_hostname' not in self or not self['short_hostname']:
+            self.short_hostname = common.hostname2short(hostname)
+
     def _name(self):
         return self.hostname
 
@@ -870,7 +876,10 @@ class ShadowsocksProxy(Proxy):
     def new_encryptor(self):
         self.update_json_config()
         if self.password and self.method:
-            return encrypt.Encryptor(self.password, self.method)
+            try:
+                return Cryptor(self.password, self.method)
+            except SystemExit:
+                raise Exception('method %s not supported' % self.method)
         else:
             return None
 

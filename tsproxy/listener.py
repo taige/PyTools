@@ -10,7 +10,7 @@ from io import StringIO
 
 import tsproxy.proxy
 from tsproxy import httphelper2 as httphelper
-from tsproxy import common, proxy, streams, topendns
+from tsproxy import common, proxy, streams, topendns, __version__
 
 
 HTTPS_CONNECT = 'CONNECT'
@@ -283,8 +283,8 @@ class ManageableHttpListener(HttpListener):
         parser.add_argument('--tail', action='store_true', dest='tail', default=False, help="move the head proxy to list tail")
         parser.add_argument('--stack', action='store_true', dest='stack', default=False, help="print threads stack trace")
         parser.add_argument('--dump', action='store_true', dest='dump', default=False, help="dump proxy info to file")
-        parser.add_argument('--speed', action='store_true', default=False, help='test the proxy/proxies speed with background mode')
-        parser.add_argument('--fspeed', action='store_true', default=False, help='test the proxy/proxies speed with foreground mode')
+        parser.add_argument('--speed', metavar='hostname', nargs='*', dest='speed', help='test the proxy/proxies speed with background mode')
+        parser.add_argument('--fspeed', metavar='hostname', nargs='*', dest='fspeed', help='test the proxy/proxies speed with foreground mode')
         # parser.add_argument('--speed', metavar='hostname', nargs='*', dest='speeds', help='test the proxy/proxies speed')
         parser.add_argument('--top', metavar='hostname', nargs=1, dest='top', help='fix the proxy to list top')
         parser.add_argument('--untop', action='store_true', dest='untop', default=False, help="unfix the top proxy")
@@ -305,14 +305,15 @@ class ManageableHttpListener(HttpListener):
                     cmd_line = '%s %s' % (request.url.path.replace('/', '--', 1), request.url.query.replace('&', ' '))
                 out = StringIO()
                 try:
-                    yield from self.do_command(cmd_line, out, connection)
+                    code = yield from self.do_command(cmd_line, out, connection)
                 except Exception as pe:
+                    code = 500
                     logger.exception("do_command(%s) error: %s(%s)", cmd_line, pe.__class__.__name__, pe)
                     out.write('%s\n\n' % pe)
                     self.print_help(out)
-                out.write('\n%s\n' % datetime.now())
+                out.write('\nTSProxy v%s [%s]\n' % (__version__, datetime.now()))
                 res_cont = out.getvalue()
-                code = 200
+                # code = 200
             ua = request.headers['User-Agent']
             if 'Mozilla' in ua or 'Chrome' in ua or 'Safari' in ua:
                 cont_type = 'text/plain'
@@ -328,7 +329,7 @@ class ManageableHttpListener(HttpListener):
             logger.exception(e)
 
     def do_command(self, cmd_line, out, cmd_conneciton):
-        cookie = None
+        cookie = 200
         cmd = self.cmd_parser.parse_args(cmd_line.split())
         if cmd.help:
             self.print_help(out)
@@ -345,9 +346,9 @@ class ManageableHttpListener(HttpListener):
             self.do_acl_del(out, cmd.acl_del_ips)
             return cookie
         if cmd.inss:
-            self.do_insert(out, cmd.inss)
+            cookie = self.do_insert(out, cmd.inss)
         if cmd.adds:
-            self.do_add(out, cmd.adds)
+            cookie = self.do_add(out, cmd.adds)
         if cmd.dels:
             self.do_del(out, cmd.dels)
         if cmd.pauses:
@@ -362,10 +363,10 @@ class ManageableHttpListener(HttpListener):
             self.do_tail(out)
         if cmd.stack:
             self.do_stack(out)
-        if cmd.speed:
-            yield from self.do_speed(out, None)  # cmd.speed)
-        if cmd.fspeed:
-            yield from self.do_speed(out, None, True)  # cmd.speed)
+        if cmd.speed is not None:
+            cookie = yield from self.do_speed(out, cmd.speed)  # cmd.speed)
+        if cmd.fspeed is not None:
+            cookie = yield from self.do_speed(out, cmd.fspeed, True)  # cmd.speed)
         if cmd.dump:
             self.do_dump(out)
         if not cmd.help and not cmd.stack:
@@ -418,28 +419,34 @@ class ManageableHttpListener(HttpListener):
         self.do_list_acl(out)
 
     def _do_add(self, out, adds, insert=False):
+        code = 200
         for key in adds:
             try:
                 self.proxy_holder.add_proxy(key, insert=insert)
-            except ValueError as err:
+            except Exception as err:
+                if code == 200:
+                    code = 415
                 out.write('\nError: %s\n\n' % err)
                 continue
             out.write('%s %s to proxy list\n' % (key, 'insert' if insert else 'added'))
+        return code
 
     def do_insert(self, out, inss):
         inss.reverse()
-        self._do_add(out, inss, insert=True)
+        return self._do_add(out, inss, insert=True)
 
     def do_add(self, out, adds):
-        self._do_add(out, adds)
+        return self._do_add(out, adds)
 
     def do_speed(self, out, hosts, foreground=False):
         out.write('speed test started... %s \r\n' % hosts)
-        if hosts and (hosts[0] == '*' or hosts[0] == 'all'):
+        if len(hosts) == 0 or (hosts[0] == '*' or hosts[0] == 'all'):
             hosts = None
         t = self.loop.create_task(self.proxy_holder.test_proxies_speed(hosts))
         if foreground:
-            yield from t
+            return (yield from t)
+        else:
+            return 200
 
     def do_pause(self, out, hosts):
         for host in hosts:

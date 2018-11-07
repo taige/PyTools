@@ -1201,9 +1201,13 @@ def args_parse(*args):
     kwargs = vars(parser.parse_args(None if args is None or len(args) == 0 else args))
     headers = kwargs.pop('headers')
     if kwargs.pop('baidu'):
+        import platform
+        mac_ver = platform.mac_ver()[0]
+        if mac_ver.count('.') < 2:
+            mac_ver += '.0'
         headers.append('X-Download-From: baiduyun')
         if kwargs['user_agent'] is None:
-            kwargs['user_agent'] = 'netdisk;2.1.0;pc;pc-mac;10.12.5;macbaiduyunguanjia'
+            kwargs['user_agent'] = 'netdisk;2.1.0;pc;pc-mac;%s;macbaiduyunguanjia' % mac_ver
     elif kwargs['user_agent'] is None:
         kwargs['user_agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36'
     if kwargs['post_data']:
