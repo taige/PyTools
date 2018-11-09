@@ -295,11 +295,11 @@ class ProxyHolder(object):
                     "https": "http://127.0.0.1:%d" % (self._proxy_port-1)
                 })
             res = yield from self._loop.run_in_executor(self.executor, async_request)
-            logger.info('_test_proxy(%s, %s) status_code: %d', proxy_name, reason, res.status_code)
+            logger.debug('_test_proxy(%s, %s) status_code: %d', proxy_name, reason, res.status_code)
             local_ip = res.headers.get('Proxy-LocalIP', None)
             return res.status_code, local_ip
         except BaseException as ex:
-            logger.warning('_test_proxy(%s, %s) %s: %s', proxy_name, reason, ex.__class__.__name__, ex)
+            logger.info('_test_proxy(%s, %s) %s: %s', proxy_name, reason, ex.__class__.__name__, ex)
         finally:
             self.testing_proxy = None
             if res:
@@ -349,7 +349,6 @@ class ProxyHolder(object):
         self.testing_proxy = proxy.short_hostname
         try:
             logger.debug("going to test_proxies_speed %s speed", proxy.short_hostname)
-            start = time.time()
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) '
                               'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36',
@@ -359,15 +358,17 @@ class ProxyHolder(object):
                 'Accept-Language': 'zh-CN,zh;q=0.8'
             }
             sess = requests.session()
-            res = sess.get(common.speed_index_url, headers=headers, timeout=timeout, proxies={
-                "http": "http://127.0.0.1:%d" % self._proxy_port,
-                "https": "http://127.0.0.1:%d" % self._proxy_port
-            })
-            if 200 <= res.status_code < 400:
+            # res = sess.get(common.speed_index_url, headers=headers, timeout=timeout, proxies={
+            #     "http": "http://127.0.0.1:%d" % self._proxy_port,
+            #     "https": "http://127.0.0.1:%d" % self._proxy_port
+            # })
+            # if 200 <= res.status_code < 400:
+            if True:
                 headers['Referer'] = common.speed_index_url
                 if bytes_range:
                     headers['Range'] = 'bytes=0-%d' % bytes_range
                 for url in common.speed_urls:
+                    start = time.time()
                     res = sess.get(url, headers=headers, timeout=timeout, proxies={
                         "http": "http://127.0.0.1:%d" % self._proxy_port,
                         "https": "http://127.0.0.1:%d" % self._proxy_port
@@ -404,7 +405,7 @@ class ProxyHolder(object):
                         #     proxy.down_speed = (proxy.down_speed + down_speed)/2
                     else:
                         proxy.down_speed = -res.status_code
-                        logger.warning('_speed_test(%s) status_code: %d url: %s', proxy.short_hostname, res.status_code, url)
+                        logger.warning('_speed_test(%s) status_code: %d SHOULD CHANGE URL: %s', proxy.short_hostname, res.status_code, url)
                     res.close()
                     res = None
             else:
