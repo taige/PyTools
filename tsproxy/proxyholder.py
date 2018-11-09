@@ -60,7 +60,7 @@ class ProxyHolder(object):
         self.monitor_port = 0
         self._proxy_port = proxy_port
         self._proxy_count = 0
-        self.hundred_c = 0  # hundred count
+        # self.hundred_c = 0  # hundred count
         self.proxy_list = []
         self.proxy_dict = {}
         # self.rlock = threading.RLock()
@@ -75,6 +75,7 @@ class ProxyHolder(object):
         self.last_speed_test_time = 0
         self.testing_proxy = None
         self.auto_pause_list = set()
+        self.speed_urls_idx = 0
 
     @property
     def proxy_names(self):
@@ -91,8 +92,8 @@ class ProxyHolder(object):
         # self.dump_file = json_file
         # with open(json_file, 'r') as f:
         #     j = json.load(f)
-        if 'hundred_c' in j:
-            self.hundred_c = j['hundred_c']
+        # if 'hundred_c' in j:
+        #     self.hundred_c = j['hundred_c']
         if 'fix_top' in j:
             self.fix_top = j['fix_top']
         if 'wan_ip' in j:
@@ -130,7 +131,7 @@ class ProxyHolder(object):
     def dump_proxys(self, j):
         j.update({
             # 'proxy_count': self._proxy_count,
-            'hundred_c': self.hundred_c,
+            # 'hundred_c': self.hundred_c,
             'proxy_list': self.proxy_list,
             'auto_pause': [*self.auto_pause_list],
             'fix_top': self.fix_top,
@@ -342,7 +343,7 @@ class ProxyHolder(object):
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
-    def _speed_test(self, proxy, url, speed_threshold=0, timeout=5, bytes_range=None):
+    def _speed_test(self, proxy, speed_threshold=0, timeout=5, bytes_range=None):
         res = None
         MAX_BUF_SIZE_KB = 200
         self.testing_proxy = proxy.short_hostname
@@ -356,45 +357,59 @@ class ProxyHolder(object):
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache',
                 'Accept-Language': 'zh-CN,zh;q=0.8'
-                # 'Proxy-Name': '%s' % proxy.short_hostname
             }
-            if bytes_range:
-                headers['Range'] = 'bytes=0-%d' % bytes_range
-            res = requests.get(url, headers=headers, timeout=timeout, proxies={
+            sess = requests.session()
+            res = sess.get(common.speed_index_url, headers=headers, timeout=timeout, proxies={
                 "http": "http://127.0.0.1:%d" % self._proxy_port,
                 "https": "http://127.0.0.1:%d" % self._proxy_port
-            }, stream=True)
-            res_len = 0
+            })
             if 200 <= res.status_code < 400:
-                con_len = res.headers.get('content-length', 0)
-                kn = 10
-                down_speed = 0
-                while True:
-                    buf = res.raw.read(kn * 1024)
-                    if not buf:
-                        break
-                    res_len += len(buf)
-                    end = time.time()
-                    time_past = end - start
-                    down_speed = res_len / time_past
-                    logger.debug("_speed_test(%s) recved %d/%s, time_past: %.1f sec, speed: %sB/S", proxy.short_hostname, res_len, con_len, time_past,
-                                 common.fmt_human_bytes(down_speed))
-                    if (kn > 10 and down_speed < min(kn, 100)*1024) or (100 < kn and time_past > timeout) or down_speed > 1024*1024:
-                        break
-                    if kn < MAX_BUF_SIZE_KB:
-                        kn *= 2
-                    if kn > MAX_BUF_SIZE_KB:
-                        kn = MAX_BUF_SIZE_KB
-                logger.info('_speed_test(%s) status_code: %d, used %.1f sec, recv %d/%s bytes, speed: %sB/S',
-                            proxy.short_hostname, res.status_code, time_past, res_len, con_len,
-                            common.fmt_human_bytes(down_speed))
-                if (time.time() - self.last_speed_test_time) > 600:
-                    proxy.down_speed = down_speed
-                else:
-                    proxy.down_speed = (proxy.down_speed + down_speed)/2
+                headers['Referer'] = common.speed_index_url
+                if bytes_range:
+                    headers['Range'] = 'bytes=0-%d' % bytes_range
+                for url in common.speed_urls:
+                    res = sess.get(url, headers=headers, timeout=timeout, proxies={
+                        "http": "http://127.0.0.1:%d" % self._proxy_port,
+                        "https": "http://127.0.0.1:%d" % self._proxy_port
+                    }, stream=True)
+                    res_len = 0
+                    if 200 <= res.status_code < 400:
+                        con_len = res.headers.get('content-length', 0)
+                        kn = 10
+                        down_speed = time_past = 0
+                        while True:
+                            buf = res.raw.read(kn * 1024)
+                            if not buf:
+                                break
+                            res_len += len(buf)
+                            end = time.time()
+                            time_past = end - start
+                            down_speed = res_len / time_past
+                            logger.debug("_speed_test(%s) recved %d/%s, time_past: %.1f sec, speed: %sB/S", proxy.short_hostname, res_len, con_len, time_past,
+                                         common.fmt_human_bytes(down_speed))
+                            if (kn > 10 and down_speed < min(kn, 100)*1024) or (100 < kn and time_past > timeout) or down_speed > 1024*1024:
+                                break
+                            if kn < MAX_BUF_SIZE_KB:
+                                kn *= 2
+                            if kn > MAX_BUF_SIZE_KB:
+                                kn = MAX_BUF_SIZE_KB
+                        proxy.down_speed = down_speed
+                        logger.info('_speed_test(%s) url: %s, used %.1f sec, recv %d/%s bytes, speed: %sB/S, proxy_speed: %sB/s',
+                                    proxy.short_hostname, url, time_past, res_len, con_len,
+                                    common.fmt_human_bytes(down_speed), common.fmt_human_bytes(proxy.down_speed))
+                        # 这部分逻辑移到了proxy.down_speed.setter
+                        # if (time.time() - self.last_speed_test_time) > 600:
+                        #     proxy.down_speed = down_speed
+                        # else:
+                        #     proxy.down_speed = (proxy.down_speed + down_speed)/2
+                    else:
+                        proxy.down_speed = -res.status_code
+                        logger.warning('_speed_test(%s) status_code: %d url: %s', proxy.short_hostname, res.status_code, url)
+                    res.close()
+                    res = None
             else:
                 proxy.down_speed = -res.status_code
-                logger.info('_speed_test(%s) status_code: %d', proxy.short_hostname, res.status_code)
+                logger.info('_speed_test(%s) status_code: %d url: %s', proxy.short_hostname, res.status_code, common.speed_index_url)
         except BaseException as ex:
             proxy.down_speed = -502
             logger.warning('_speed_test(%s) %s: %s', proxy.short_hostname, ex.__class__.__name__, ex)
@@ -404,13 +419,11 @@ class ProxyHolder(object):
                 res.close()
         return proxy.down_speed
 
-    def test_proxies_speed(self, hosts=None, re_test=2, bytes_range=2133961,
-                           url='https://vt.media.tumblr.com/tumblr_olmzaj26fj1qlmvfe_480.mp4'):
+    def test_proxies_speed(self, hosts=None, bytes_range=2133961):
         # with self.rlock:
         if self.speed_testing:
             return 501
         self.speed_testing = True
-        code = 201
 
         def async_test(_hosts=None):
             if _hosts is None:
@@ -419,7 +432,7 @@ class ProxyHolder(object):
             _code = 202
             # logger.debug("test_proxies_speed _hosts: %s", _hosts)
             if not _hosts or self.proxy_list[0].short_hostname in _hosts:
-                max_speed = self._speed_test(self.proxy_list[0], url, bytes_range=bytes_range)
+                max_speed = self._speed_test(self.proxy_list[0], bytes_range=bytes_range)
                 if max_speed < 0:
                     _code = abs(max_speed)
                     max_speed = 0
@@ -440,7 +453,7 @@ class ProxyHolder(object):
                 if proxy.pause and _hosts is None:  # or 0 == proxy.tp90 or proxy.tp90 > ProxyStat.calc_tp90()*1.2:
                     logger.debug("test_proxies_speed %s skip for tp90 %.1f or pause=%s", proxy.short_hostname, proxy.tp90, proxy.pause)
                     continue
-                _speed = self._speed_test(proxy, url, speed_threshold=0 if _hosts else max_speed*0.5, bytes_range=bytes_range)
+                _speed = self._speed_test(proxy, speed_threshold=0 if _hosts else max_speed*0.5, bytes_range=bytes_range)
                 if _speed < 0:
                     _code = abs(_speed)
                     _speed = 0
@@ -462,7 +475,7 @@ class ProxyHolder(object):
                 code = yield from self._loop.run_in_executor(self.executor, async_test)
                 self.last_speed_test_time = time.time()
                 self.proxy_list.sort(key=sort_proxies)
-                if (self.head_proxy.down_speed < 100 * 1024 or self.head_proxy.hostname not in may_the_heads) and retried < re_test:
+                if hosts is None and (self.head_proxy.down_speed < 100 * 1024 or self.head_proxy.hostname not in may_the_heads) and retried < common.speed_retry_count:
                     retried += 1
                     logger.info("test_proxies_speed RE-RUN #%d for head[%s] speed=%sB/S",
                                 retried, self.head_proxy.short_hostname, common.fmt_human_bytes(self.head_proxy.down_speed))
@@ -501,6 +514,8 @@ class ProxyHolder(object):
         del self.proxy_dict[proxy.short_hostname]
         # delete cached response time
         ProxyStat.global_resp_time.checkout(proxy.hostname)
+        if proxy.hostname in self.auto_pause_list:
+            self.auto_pause_list.remove(proxy.hostname)
         self._proxy_count -= 1
 
     def sort_proxies(self):
@@ -604,7 +619,7 @@ class ProxyHolder(object):
             logger.log(5, 'checking %s is not the HEAD', checking_proxy)
             return True
 
-        logger.info("========== %d(%.1f) ==========", self.hundred_c, ProxyStat.calc_tp90())
+        logger.info("========== global tp90: %.1f ==========", ProxyStat.calc_tp90())
 
         # move head to tail condition:
         # 1: fail_rate > 210%

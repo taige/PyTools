@@ -19,7 +19,7 @@ import sys
 __all__ = ['lookup_conf_file', '__version__']
 
 
-__version__ = "1.0.181030.3"
+__version__ = "1.0.181109.5"
 
 conf_path = []
 

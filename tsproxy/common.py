@@ -10,6 +10,7 @@ import threading
 import time
 import traceback
 from io import StringIO
+from configparser import ConfigParser
 
 from async_timeout import timeout
 
@@ -47,6 +48,12 @@ tp90_expired_time = 3600*3
 # use recent 100 response time on calc tp90
 tp90_calc_count = 100
 
+# speed test result lifetime
+speed_lifetime = 12 * 3600
+
+speed_retry_count = 2
+speed_index_url = 'https://www.tumblr.com/'
+speed_urls = ['https://ve.media.tumblr.com/tumblr_pfwg4l558b1sq04bj_480.mp4', 'https://vtt.tumblr.com/tumblr_pf98cpiaq61x9cgqk.mp4']
 
 speed_hosts = set()
 speed_black_hosts = set()
@@ -54,6 +61,77 @@ speed_black_hosts = set()
 speed_hosts_file = None
 speed_hosts_update = 0
 speed_hosts_file_mod = 0
+
+
+def load_tsproxy_conf(conf_file):
+    global hundred
+    # proxy timeout config
+    global proxy_idle_sec
+    # seconds of proxys check
+    global proxys_check_timeout
+    # next retry time(seconds) on error
+    global retry_interval_on_error
+    # close connection on idle 1/2 hour
+    global close_on_idle_timeout
+    # max times for fail_rate
+    global max_times_fail_rate
+    # tp90 increment percent Threshold
+    global tp90_inc_threshold
+    # when head proxy's tp90 greater than global tp90 2 times, cut it
+    global global_tp90_threshold
+    # fail rate threshold
+    global fail_rate_threshold
+    # response time expired after 3 hour on calc tp90
+    global tp90_expired_time
+    # use recent 100 response time on calc tp90
+    global tp90_calc_count
+
+    global speed_lifetime
+    global speed_retry_count
+    global speed_index_url
+    global speed_urls
+
+    config = ConfigParser(allow_no_value=True, delimiters=('='))
+    config.read(conf_file)
+
+    def _common_conf_get(func, key, default, section="common", remove=False):
+        try:
+            if config.has_option(section, key):
+                value = func(section, key)
+                if remove:
+                    config.remove_option(section, key)
+                return value
+        except Exception as ex:
+            logging.exception('_common_conf_get(%s, %s) fail: %s', section, key, ex)
+        return default
+
+    if config.has_section('common'):
+        logger.info('tsproxy.conf: [common] %s', config.items('common'))
+    hundred = _common_conf_get(config.getint, "hundred", hundred)
+    proxy_idle_sec = _common_conf_get(config.getint, "proxy_idle_sec", proxy_idle_sec)
+    proxys_check_timeout = _common_conf_get(config.getint, "proxys_check_timeout", proxys_check_timeout)
+    retry_interval_on_error = _common_conf_get(config.getint, "retry_interval_on_error", retry_interval_on_error)
+    close_on_idle_timeout = _common_conf_get(config.getint, "close_on_idle_timeout", close_on_idle_timeout)
+    max_times_fail_rate = _common_conf_get(config.getint, "max_times_fail_rate", max_times_fail_rate)
+    tp90_inc_threshold = _common_conf_get(config.getfloat, "tp90_inc_threshold", tp90_inc_threshold)
+    global_tp90_threshold = _common_conf_get(config.getfloat, "global_tp90_threshold", global_tp90_threshold)
+    fail_rate_threshold = _common_conf_get(config.getfloat, "fail_rate_threshold", fail_rate_threshold)
+    tp90_expired_time = _common_conf_get(config.getint, "tp90_expired_time", tp90_expired_time)
+    tp90_calc_count = _common_conf_get(config.getint, "tp90_calc_count", tp90_calc_count)
+
+    if config.has_section("speed_test"):
+        if config.has_section('speed_test'):
+            logger.info('tsproxy.conf: [speed_test] %s', config.items('speed_test'))
+        speed_lifetime = _common_conf_get(config.getint, "speed_lifetime", speed_lifetime, section="speed_test", remove=True)
+        speed_retry_count = _common_conf_get(config.getint, "speed_retry_count", speed_retry_count, section="speed_test", remove=True)
+        speed_index_url = _common_conf_get(config.get, "speed_index_url", speed_index_url, section="speed_test", remove=True)
+        _speed_urls = set()
+        for (k, v) in config.items("speed_test"):
+            if k.startswith("http"):
+                _speed_urls.add(k)
+        if len(_speed_urls) > 0:
+            speed_urls.clear()
+            speed_urls.extend(_speed_urls)
 
 
 def update_speed_hosts():

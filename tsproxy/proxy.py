@@ -34,8 +34,6 @@ class ProxyStat(dict):
     global_last_tp90 = 0.0
     global_tp90_inc_time = 0
 
-    speed_lifetime = 12*3600
-
     def __init__(self, proxy_monitor=None, **kwargs):
         if 'resp_time' in kwargs:
             del kwargs['resp_time']
@@ -72,11 +70,8 @@ class ProxyStat(dict):
 
     @property
     def down_speed(self):
-        if 'down_speed' not in self:
+        if 'down_speed' not in self or 'down_speed_settime' not in self or (time.time() - self['down_speed_settime']) > common.speed_lifetime:
             self['down_speed'] = 0
-            self['down_speed_settime'] = time.time()
-        if (time.time() - self['down_speed_settime']) > ProxyStat.speed_lifetime:
-            return 0
         return self['down_speed']
 
     @property
@@ -84,7 +79,7 @@ class ProxyStat(dict):
         if 'realtime_speed' not in self:
             self['realtime_speed'] = 0
         #     self['realtime_speed_time'] = time.time()
-        # if (time.time() - self['realtime_speed_time']) > ProxyStat.speed_lifetime:
+        # if (time.time() - self['realtime_speed_time']) > common.speed_lifetime:
         #     return 0
         return self['realtime_speed']
 
@@ -104,7 +99,11 @@ class ProxyStat(dict):
 
     @down_speed.setter
     def down_speed(self, d_speed):
-        self['down_speed'] = d_speed
+        # 1 分钟内的速度取平均值
+        if d_speed < 0 or 'down_speed_settime' not in self or (time.time() - self['down_speed_settime']) > 60:
+            self['down_speed'] = d_speed
+        else:
+            self['down_speed'] = (self.down_speed + d_speed)/2
         self['down_speed_settime'] = time.time()
 
     @property
@@ -509,7 +508,7 @@ class Proxy(ProxyStat):
         s = '<%s://%s/%d tp90:%.1f/%d count:%d/f%d//%d/f%d%s>' % \
             (self.protocol, self.short_hostname, self.port, self.tp90, self._tp90_len, self.total_count, self.total_fail,
              self.proxy_count, self.fail_count,
-             '%s%s%s' % ('' if self.down_speed == 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
+             '%s%s%s' % ('' if self.down_speed <= 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
                          ' %s' % format(int(self.sort_key), ',') if 'sort_key' in self else '', '=' if self.pause else '>'))
         return s
 
@@ -571,7 +570,7 @@ class Proxy(ProxyStat):
                    self.tp90_len, format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
                    100*(0 if self.total_count == 0 else self.total_fail/self.total_count),
                    self.proxy_count, 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count),
-                   '%s%s%s' % ('' if self.down_speed == 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
+                   '%s%s%s' % ('' if self.down_speed <= 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
                                ' %s' % format(int(self.sort_key), ',') if 'sort_key' in self else '', '=' if self.pause else '>'))
             if (time.time() - self.head_time) < 24*3600 or index == 0:
                 output += ' %s' % datetime.fromtimestamp(self.head_time)

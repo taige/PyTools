@@ -454,6 +454,8 @@ class ManageableHttpListener(HttpListener):
             if p is not None:
                 p.pause = not p.pause
                 out.write('%s %s\n' % (p, 'paused' if p.pause else 'resumed'))
+                if not p.pause and p.hostname in self.proxy_holder.auto_pause_list:
+                    self.proxy_holder.auto_pause_list.remove(p.hostname)
                 if p.pause and idx == 0:
                     self.do_tail(out=None)
             else:

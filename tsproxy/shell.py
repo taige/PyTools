@@ -11,7 +11,7 @@ from concurrent.futures import CancelledError
 
 import uvloop
 
-from tsproxy.common import print_stack_trace, lookup_conf_file
+from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, __version__
 from tsproxy.connector import RouterableConnector, CheckConnector
 from tsproxy.listener import ManageableHttpListener, HttpListener
 from tsproxy.proxyholder import ProxyHolder
@@ -20,6 +20,10 @@ from tsproxy import topendns
 logger = logging.getLogger(__name__)
 
 logger_conf_mod = 0
+conf_file_mod = 0
+
+
+is_shutdown = False
 
 
 def args_parse(args=None):
@@ -73,19 +77,29 @@ def args_parse(args=None):
     return kwargs, hostnames
 
 
-async def update_log_conf(logger_conf_file, update_interval=10, loop=None):
+async def update_conf(conf_file, logger_conf_file, update_interval=10, loop=None):
+    global conf_file_mod
     global logger_conf_mod
-    if logger_conf_mod > 0:
-        while True:
-            await asyncio.sleep(update_interval, loop=loop)
+    while True:
+        await asyncio.sleep(update_interval, loop=loop)
+        if conf_file_mod > 0:
+            try:
+                mtime = os.stat(conf_file).st_mtime
+                if mtime > conf_file_mod:
+                    load_tsproxy_conf(conf_file)
+                    conf_file_mod = mtime
+                    logger.info('base conf file %s reloaded', conf_file)
+            except BaseException as ex_log1:
+                logging.exception('update_conf(%s) fail: %s', conf_file, ex_log1)
+        if logger_conf_mod > 0:
             try:
                 mtime = os.stat(logger_conf_file).st_mtime
                 if mtime > logger_conf_mod:
                     logging.config.fileConfig(logger_conf_file, disable_existing_loggers=False)
                     logger_conf_mod = mtime
-                    logger.info('%s reloaded', logger_conf_file)
+                    logger.info('logger conf file %s reloaded', logger_conf_file)
             except BaseException as ex_log1:
-                logging.exception('update_log_conf(%s) fail: %s', logger_conf_file, ex_log1)
+                logging.exception('update_logger_conf(%s) fail: %s', logger_conf_file, ex_log1)
 
 
 async def update_apnic(inital_wait, loop=None):
@@ -100,10 +114,8 @@ async def update_apnic(inital_wait, loop=None):
             logging.exception('update_apnic fail: %s', ex)
 
 
-is_shutdown = False
-
-
 def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='proxies.json', pid_file='.ss-proxy.pid', smart_mode=1, **kwargs):
+    global conf_file_mod
     global logger_conf_mod
     _startup = False
 
@@ -111,13 +123,24 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
     if 'logger_conf' in kwargs and kwargs['logger_conf']:
         logger_conf_file = kwargs.pop('logger_conf')
     logger_conf_file = lookup_conf_file(logger_conf_file)
-    asyncio.set_event_loop(uvloop.new_event_loop())
     try:
         logger_conf_mod = os.stat(logger_conf_file).st_mtime
         logging.config.fileConfig(logger_conf_file, disable_existing_loggers=False)
+        logger.info('%s loaded', logger_conf_file)
     except BaseException as ex_log:
         logging.basicConfig(format='%(asctime)s %(levelname)-5s [%(threadName)-14s] %(name)-16s - %(message)s', level=logging.DEBUG)
         logging.exception('fileConfig(%s) fail: %s', logger_conf_file, ex_log)
+
+    _conf_file = 'tsproxy.conf'
+    if 'conf_file' in kwargs and kwargs['conf_file']:
+        _conf_file = kwargs.pop('conf_file')
+    _conf_file = lookup_conf_file(_conf_file)
+    try:
+        conf_file_mod = os.stat(_conf_file).st_mtime
+        load_tsproxy_conf(_conf_file)
+        logger.info('%s loaded', _conf_file)
+    except BaseException as ex_conf:
+        logging.exception('load_tsproxy_conf(%s) fail: %s', _conf_file, ex_conf)
 
     try:
         with open(proxy_file, 'r') as f:
@@ -126,6 +149,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
         logger.warning('proxies not config, and proxy config file %s not found' % proxy_file)
         j_in = {}
 
+    asyncio.set_event_loop(uvloop.new_event_loop())
     loop = asyncio.get_event_loop()
     proxy_holder = ProxyHolder(http_port+1, proxy_file=proxy_file)
     if not proxies:
@@ -193,11 +217,12 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
 
     try:
         if not is_shutdown:
-            loop.create_task(update_log_conf(logger_conf_file, loop=loop))
+            loop.create_task(update_conf(_conf_file, logger_conf_file, loop=loop))
             loop.create_task(update_apnic(next_update_apnic, loop=loop))
             loop.create_task(proxy_holder.monitor_loop(loop=loop))
 
-            logger.info('TSProxy Startup')
+            logger.info('TSProxy v%s Startup' % __version__)
+            print('TSProxy v%s Startup' % __version__)
             _startup = True
             loop.run_forever()
         server.close()
