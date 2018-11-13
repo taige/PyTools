@@ -4,13 +4,12 @@ import concurrent.futures
 import logging
 import socket
 import time
-from datetime import datetime
 from io import BytesIO
 from io import StringIO
 
 import tsproxy.proxy
 from tsproxy import httphelper2 as httphelper
-from tsproxy import common, proxy, streams, topendns, __version__
+from tsproxy import common, proxy, streams, topendns, str_now, __version__
 
 
 HTTPS_CONNECT = 'CONNECT'
@@ -311,7 +310,7 @@ class ManageableHttpListener(HttpListener):
                     logger.exception("do_command(%s) error: %s(%s)", cmd_line, pe.__class__.__name__, pe)
                     out.write('%s\n\n' % pe)
                     self.print_help(out)
-                out.write('\nTSProxy v%s [%s]\n' % (__version__, datetime.now()))
+                out.write('\nTSProxy v%s\n[%s %s]\n' % (__version__, str_now(), str_now(self.proxy_holder.last_speed_test_time)))
                 res_cont = out.getvalue()
                 # code = 200
             ua = request.headers['User-Agent']

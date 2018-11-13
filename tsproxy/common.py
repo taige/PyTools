@@ -196,9 +196,9 @@ def print_stack_trace(limit=5, out=sys.stdout, *threads):
     if len(threads) == 0:
         threads = threading.enumerate()
     for th in threads:
-        print(th, file=out)
+        ts_print(th, file=out)
         traceback.print_stack(frames[th.ident], limit=limit, file=out)
-        print(file=out)
+        ts_print(file=out)
 
 
 def errno_from_exception(e):

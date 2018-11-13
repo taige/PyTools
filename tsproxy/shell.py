@@ -11,7 +11,7 @@ from concurrent.futures import CancelledError
 
 import uvloop
 
-from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, __version__
+from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, ts_print, __version__
 from tsproxy.connector import RouterableConnector, CheckConnector
 from tsproxy.listener import ManageableHttpListener, HttpListener
 from tsproxy.proxyholder import ProxyHolder
@@ -222,7 +222,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
             loop.create_task(proxy_holder.monitor_loop(loop=loop))
 
             logger.info('TSProxy v%s Startup' % __version__)
-            print('TSProxy v%s Startup' % __version__)
+            ts_print('TSProxy v%s Startup' % __version__)
             _startup = True
             loop.run_forever()
         server.close()
@@ -251,14 +251,14 @@ def main():
                 startup(*hostnames, **kwargs)
                 os._exit(0)
             else:
-                print('#%d MONITOR PROXY_PROCESS %d... ' % (i, pid), flush=True)
+                ts_print('#%d MONITOR PROXY_PROCESS %d... ' % (i, pid), flush=True)
                 _, rc = os.waitpid(pid, 0)
-                print('#%d PROXY PROCESS %d QUIT WITH %d ... ' % (i, pid, rc), flush=True)
+                ts_print('#%d PROXY PROCESS %d QUIT WITH %d ... ' % (i, pid, rc), flush=True)
                 if rc == 0 and not os.path.exists(kwargs['pid_file']):
-                    print('#%d QUIT MONITOR' % i, flush=True)
+                    ts_print('#%d QUIT MONITOR' % i, flush=True)
                     break
                 else:
-                    print('#%d RESTART PROXY PROCESS...' % i, flush=True)
+                    ts_print('#%d RESTART PROXY PROCESS...' % i, flush=True)
                     time.sleep(1)
 
 

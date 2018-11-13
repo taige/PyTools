@@ -474,7 +474,8 @@ class ProxyHolder(object):
             may_the_heads = [_may_the_head.hostname, head_proxy.hostname]
             while True:
                 code = yield from self._loop.run_in_executor(self.executor, async_test)
-                self.last_speed_test_time = time.time()
+                if hosts is None:
+                    self.last_speed_test_time = time.time()
                 self.proxy_list.sort(key=sort_proxies)
                 if hosts is None and (self.head_proxy.down_speed < 100 * 1024 or self.head_proxy.hostname not in may_the_heads) and retried < common.speed_retry_count:
                     retried += 1
