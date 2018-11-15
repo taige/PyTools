@@ -293,8 +293,8 @@ def async_dns_query(qname, raise_on_fail=False, local_dns=False, ex_func=False, 
     return ip
 
 
-def dns_query(qname, **kwargs):
-    ips = dns_query_ex(qname, **kwargs)
+def dns_query(qname, raise_on_fail=False, local_dns=False, in_cache=False, force_remote=False, **kwargs):
+    ips = dns_query_ex(qname, raise_on_fail=raise_on_fail, local_dns=local_dns, in_cache=in_cache, force_remote=force_remote, **kwargs)
     if ips is not None and isinstance(ips, list):
         if len(ips) > 1:
             ip = ips.pop(0)
