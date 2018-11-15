@@ -35,7 +35,7 @@ class Connector(object):
         conn.target_host = peer.target_host = addr
 
     @asyncio.coroutine
-    def _connect(self, handler, peer, host, port, loop=None,
+    def _connect(self, handler, peer, ip, port, host=None, loop=None,
                  encoder=None, decoder=None, init_coro=None, connect_timeout=common.default_timeout, **kwargs):
 
         init_done = asyncio.Event()
@@ -47,10 +47,10 @@ class Connector(object):
             if init_ex is None:
                 yield from handler(_conn, peer)
 
-        kwargs.setdefault('local_dns', False)
+        # kwargs.setdefault('local_dns', False)
         try:
             with common.Timeout(connect_timeout):
-                connection = yield from streams.start_connection(_handler_wrapper, host=host, port=port, loop=loop,
+                connection = yield from streams.start_connection(_handler_wrapper, ip, port, host=host, loop=loop,
                                                                  encoder=encoder, decoder=decoder, connect_timeout=connect_timeout, **kwargs)
                 connection.set_attr(tsproxy.proxy.PEER_CONNECTION, peer)
                 if init_coro:
@@ -76,8 +76,14 @@ class DirectConnector(Connector):
 
     @asyncio.coroutine
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
-        # peer.set_attr(tsproxy.proxy.PROXY_NAME, 'D')
-        connection = yield from super()._connect(self._proxy, peer, target_host, target_port, loop, local_dns=True, **kwargs)
+        dns_start_time = time.time()
+        target_ip = yield from topendns.async_dns_query(target_host, raise_on_fail=True, local_dns=True, loop=loop)
+        dns_used = time.time() - dns_start_time
+        connect_timeout = kwargs.pop('connect_timeout', common.default_timeout)
+        if dns_used > connect_timeout:
+            raise asyncio.TimeoutError('DirectConnector.connect() timeout, async_dns_query used %.3f seconds' % dns_used)
+
+        connection = yield from super()._connect(self._proxy, peer, target_ip, target_port, host=target_host, loop=loop, connect_timeout=(connect_timeout-dns_used), **kwargs)
         self._set_proxy_info(connection, target_host, target_port, peer)
         return connection
 
@@ -89,37 +95,60 @@ class ProxyConnector(Connector):
         self.proxy_holder = proxy_holder
 
     @asyncio.coroutine
-    def _connect_proxy(self, proxy, peer, target_host, target_port, connect_timeout, loop=None, **kwargs):
+    def _connect_proxy(self, proxy, peer, target_host, target_port, connect_timeout, loop=None, speed_test_ip=None, **kwargs):
 
         @asyncio.coroutine
         def _init_core(_conn):
             yield from proxy.init_connection(_conn, target_host, target_port, **kwargs)
 
+        start_time = time.time()
         timeout = connect_timeout + time.time()
         proxy_host, proxy_port = proxy.addr
         peer.set_attr(tsproxy.proxy.PROXY_NAME, proxy.short_hostname)
-        logger.debug('connecting to proxy(%s:%d) for (%s->%s:%d)', proxy_host, proxy_port, peer, target_host, target_port)
-        for i in range(0, 2):
+
+        if speed_test_ip is not None:
+            logger.debug('speed_testing %s/%s ...', proxy_host, speed_test_ip)
+            proxy_ips = [speed_test_ip]
+        else:
             try:
-                proxy_conn = yield from super()._connect(proxy, peer, proxy_host, proxy_port, loop,
+                proxy_ips = yield from topendns.async_dns_query(proxy_host, raise_on_fail=True, ex_func=True, loop=loop)
+                proxy.resolved_addr = (proxy_ips, proxy_port)
+            except socket.gaierror as ex:
+                # DNS解析失败，则用之前解析的IP地址进行一次尝试
+                if proxy.resolved_addr:
+                    proxy_ips, _ = proxy.resolved_addr
+                    logger.debug('%s, use resolved address(%s/%s) ...', ex, proxy_host, proxy_ips)
+                else:
+                    raise
+        dns_used = time.time() - start_time
+        left_time = connect_timeout - dns_used
+        if left_time <= 0:
+            raise asyncio.TimeoutError('ProxyConnector._connect_proxy() timeout, async_dns_query used %.3f seconds' % dns_used)
+
+        for i in range(0, len(proxy_ips)):
+            proxy_ip = proxy_ips[0]
+            logger.debug('connecting to proxy(%s/%s:%d) for (%s->%s:%d)', proxy_host, proxy_ip, proxy_port, peer, target_host, target_port)
+            try:
+                proxy_conn = yield from super()._connect(proxy, peer, proxy_ip, proxy_port, host=proxy_host, loop=loop,
                                                          encoder=None if not hasattr(proxy, 'encoder') else proxy.encoder,
                                                          decoder=None if not hasattr(proxy, 'decoder') else proxy.decoder,
-                                                         init_coro=_init_core, connect_timeout=connect_timeout, **kwargs)
-                proxy.resolved_addr = (proxy_conn.raddr, proxy_conn.rport)
+                                                         init_coro=_init_core, connect_timeout=left_time, **kwargs)
                 self._set_proxy_info(proxy_conn, target_host, target_port, peer, proxy)
                 return proxy_conn
-            except socket.gaierror as ex:
-                connect_timeout = timeout - time.time()
+            except (ConnectionError, OSError) as ex:
+                left_time = timeout - time.time()
                 # DNS解析失败，则用之前解析的IP地址进行一次尝试
-                if i == 0 and proxy.resolved_addr and connect_timeout > 0:
-                    proxy_host, proxy_port = proxy.resolved_addr
-                    logger.debug('%s, use resolved address(%s) try again...', ex, proxy_host)
+                if len(proxy_ips) > 1 and left_time > 0:
+                    _ip = proxy_ips.pop(0)
+                    proxy_ips.append(_ip)
+                    logger.info('%s, try next ip(%s/%s) try again...', ex, proxy_host, proxy_ips[0])
                     continue
                 else:
                     raise
 
     @asyncio.coroutine
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+        speed_test_ip = kwargs.pop('speed_test_ip', None)
         timeout = time.time() + kwargs.pop('connect_timeout', common.default_timeout)
         proxy_count = self.proxy_holder.psize
         if proxy_count <= 0:
@@ -143,7 +172,7 @@ class ProxyConnector(Connector):
             elif left_time < 1:
                 left_time = 1
             try:
-                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop, **kwargs)
+                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop=loop, speed_test_ip=speed_test_ip, **kwargs)
                 proxy_conn.set_attr('Proxy-Name', proxy_name)
                 proxy.error_count = 0
                 return proxy_conn
@@ -152,7 +181,6 @@ class ProxyConnector(Connector):
                 logger.debug("connect to proxy(%s:%d) for (%s, %s, %s) %s: %s",
                              proxy.hostname, proxy.port, peer, target_host, target_port, ex1.__class__.__name__, ex1)
                 # move the head to tail
-                # if proxy_name is not None:
                 used = time.time()-timeout+common.default_timeout
                 err_no = common.errno_from_exception(ex1)
                 if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH):
@@ -436,4 +464,5 @@ class CheckConnector(ProxyConnector):
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
         logger.debug("speed_testing_proxy=%s", self.proxy_holder.testing_proxy)
-        return (yield from super().connect(peer, target_host, target_port, self.proxy_holder.testing_proxy, loop, **kwargs))
+        proxy_name, proxy_ip = self.proxy_holder.testing_proxy.split('/') if '/' in self.proxy_holder.testing_proxy else (self.proxy_holder.testing_proxy, None)
+        return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, speed_test_ip=proxy_ip, **kwargs))

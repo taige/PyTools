@@ -13,7 +13,7 @@ except ImportError:
     from shadowsocks.encrypt import Encryptor as Cryptor
 
 from tsproxy import httphelper2 as httphelper
-from tsproxy import common, streams, topendns
+from tsproxy import common, streams, topendns, str_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -563,17 +563,30 @@ class Proxy(ProxyStat):
     def init_connection(self, connection, host, port, **kwargs):
         pass
 
-    def print_info(self, index=None, force_print=True, out=None):
+    def print_info(self, index=None, force_print=True, out=None, high_light=False, max_count=6):
         if self.total_count > 0 or self.proxy_count > 0 or force_print:
-            output = "PROXY%s<%s://%-4s:%-5d tp90=%.1f/%d count=%s/f%.1f%%//%d/f%.1f%%%s>" % \
-                  ('' if index is None else '[%2d]' % index, self.protocol, self.short_hostname, self.port, self.tp90,
-                   self.tp90_len, format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
-                   100*(0 if self.total_count == 0 else self.total_fail/self.total_count),
-                   self.proxy_count, 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count),
-                   '%s%s%s' % ('' if self.down_speed <= 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
-                               ' %s' % format(int(self.sort_key), ',') if 'sort_key' in self else '', '=' if self.pause else '>'))
-            if (time.time() - self.head_time) < 24*3600 or index == 0:
-                output += ' %s' % datetime.fromtimestamp(self.head_time)
+            fr1 = 100*(0 if self.total_count == 0 else self.total_fail/self.total_count)
+            fr2 = 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count)
+            _max_len = len(format(max_count, ','))
+            count_fmt = '%%-%ds' % _max_len
+            output = "PROXY%4s %s %-20s %-13s count=%s/%s|%3d/%s" % \
+                     ('' if index is None else '[%2d]' % index,
+                      '~' if self.pause and self.hostname in self.proxy_monitor.auto_pause_list else '=' if self.pause else '>',
+                      '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
+                      'tp90=%.1f/%d' % (self.tp90, self.tp90_len),
+                      count_fmt % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
+                      ('f%.0f.%%' if fr1 >= 10 else 'f%.1f%%') % fr1,
+                      self.proxy_count,
+                      ('f%.0f.%%' if fr2 >= 10 else 'f%.1f%%') % fr2
+                      )
+            if 'down_speed_settime' in self and (time.time() - self['down_speed_settime']) < 24*3600:
+                output += ' S=%s' % str_datetime(timestamp=self['down_speed_settime'], fmt='%H:%M:%S,%f', end=12)
+            # if (time.time() - self.head_time) < 24*3600 or index == 0:
+            #     output += ' H=%s' % str_datetime(timestamp=self.head_time, fmt='%H:%M:%S,%f', end=12)
+            if self.down_speed > 0:
+                output += ' speed=%sB/S %s' % (common.fmt_human_bytes(self.down_speed), format(int(self.sort_key), ',') if 'sort_key' in self else '')
+            if high_light:
+                output = '\x1b[1;31;48m%s\x1b[0m' % output
             if out:
                 out.write('%s\r\n' % output)
             else:
@@ -619,14 +632,16 @@ class Proxy(ProxyStat):
     @property
     def resolved_addr(self):
         if 'resolved_addr' in self:
+            if not isinstance(self['resolved_addr'][0], list):
+                self['resolved_addr'][0] = [self['resolved_addr'][0]]
             return self['resolved_addr']
         else:
-            return self.addr
+            return [self.hostname], self.port
 
     @resolved_addr.setter
     def resolved_addr(self, addr):
         if 'resolved_addr' in self:
-            if addr[0] != self['resolved_addr'][0]:  # ip 有变更，重置统计数据
+            if sorted(addr[0]) != sorted(self.resolved_addr[0]):  # ip 有变更，重置统计数据
                 self.total_count = self.proxy_count
                 self.total_fail = self.fail_count
         self['resolved_addr'] = addr

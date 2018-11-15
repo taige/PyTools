@@ -9,7 +9,7 @@ from io import StringIO
 
 import tsproxy.proxy
 from tsproxy import httphelper2 as httphelper
-from tsproxy import common, proxy, streams, topendns, str_now, __version__
+from tsproxy import common, proxy, streams, topendns, str_datetime, __version__
 
 
 HTTPS_CONNECT = 'CONNECT'
@@ -291,6 +291,7 @@ class ManageableHttpListener(HttpListener):
 
     def on_no_forwardhost(self, connection, request):
         try:
+            ua = request.headers['User-Agent']
             if self.proxy_holder is None:
                 res_cont = "it's ok"
                 code = 200
@@ -304,16 +305,15 @@ class ManageableHttpListener(HttpListener):
                     cmd_line = '%s %s' % (request.url.path.replace('/', '--', 1), request.url.query.replace('&', ' '))
                 out = StringIO()
                 try:
-                    code = yield from self.do_command(cmd_line, out, connection)
+                    code = yield from self.do_command(cmd_line, out, connection, ua)
                 except Exception as pe:
                     code = 500
                     logger.exception("do_command(%s) error: %s(%s)", cmd_line, pe.__class__.__name__, pe)
                     out.write('%s\n\n' % pe)
                     self.print_help(out)
-                out.write('\nTSProxy v%s\n[%s %s]\n' % (__version__, str_now(), str_now(self.proxy_holder.last_speed_test_time)))
+                out.write('\nS=%s\nTSProxy v%s %s\n' % (str_datetime(self.proxy_holder.last_speed_test_time), __version__, str_datetime()))
                 res_cont = out.getvalue()
                 # code = 200
-            ua = request.headers['User-Agent']
             if 'Mozilla' in ua or 'Chrome' in ua or 'Safari' in ua:
                 cont_type = 'text/plain'
                 # cont_type = 'text/html'
@@ -327,7 +327,7 @@ class ManageableHttpListener(HttpListener):
         except BaseException as e:
             logger.exception(e)
 
-    def do_command(self, cmd_line, out, cmd_conneciton):
+    def do_command(self, cmd_line, out, cmd_conneciton, user_agent=None):
         cookie = 200
         cmd = self.cmd_parser.parse_args(cmd_line.split())
         if cmd.help:
@@ -340,9 +340,11 @@ class ManageableHttpListener(HttpListener):
             return cookie
         if cmd.acl_add_ips:
             self.do_acl_add(out, cmd.acl_add_ips)
+            self.do_dump(out)
             return cookie
         if cmd.acl_del_ips:
             self.do_acl_del(out, cmd.acl_del_ips)
+            self.do_dump(out)
             return cookie
         if cmd.inss:
             cookie = self.do_insert(out, cmd.inss)
@@ -366,10 +368,10 @@ class ManageableHttpListener(HttpListener):
             cookie = yield from self.do_speed(out, cmd.speed)  # cmd.speed)
         if cmd.fspeed is not None:
             cookie = yield from self.do_speed(out, cmd.fspeed, True)  # cmd.speed)
-        if cmd.dump:
+        if cmd.dump or cmd.inss or cmd.adds or cmd.dels or cmd.pauses:
             self.do_dump(out)
         if not cmd.help and not cmd.stack:
-            self.do_list(out)
+            self.do_list(out, cmd.fspeed if user_agent is not None and 'curl' in user_agent else None)
         return cookie
 
     def print_help(self, out):
@@ -440,8 +442,10 @@ class ManageableHttpListener(HttpListener):
     def do_speed(self, out, hosts, foreground=False):
         out.write('speed test started... %s \r\n' % hosts)
         if len(hosts) == 0 or (hosts[0] == '*' or hosts[0] == 'all'):
-            hosts = None
-        t = self.loop.create_task(self.proxy_holder.test_proxies_speed(hosts))
+            _hosts = None
+        else:
+            _hosts = hosts
+        t = self.loop.create_task(self.proxy_holder.test_proxies_speed(_hosts))
         if foreground:
             return (yield from t)
         else:
@@ -472,13 +476,14 @@ class ManageableHttpListener(HttpListener):
             else:
                 out.write('\nError: %s DID NOT in proxy list\n\n' % host)
 
-    def do_list(self, out):
+    def do_list(self, out, high_light_proxies=None):
         out.write('global tp90: %.1f/%d/%d\r\n' % (tsproxy.proxy.ProxyStat.calc_tp90(),
                                                    tsproxy.proxy.ProxyStat.global_tp90_len,
                                                    tsproxy.proxy.ProxyStat.global_resp_count))
+        _max_count = sorted(self.proxy_holder.proxy_list, key=lambda p: p.total_count, reverse=True)[0].total_count
         for i in range(0, self.proxy_holder.psize):
             _proxy = self.proxy_holder.proxy_list[i]
-            _proxy.print_info(i, out=out)
+            _proxy.print_info(i, out=out, max_count=_max_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
 
     def do_head(self, out, host):
         p, _ = self.proxy_holder.find_proxy(host)

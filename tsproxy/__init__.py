@@ -17,24 +17,24 @@ import os
 import sys
 from datetime import datetime
 
-__all__ = ['lookup_conf_file', 'str_now', 'ts_print', '__version__']
+__all__ = ['lookup_conf_file', 'str_datetime', 'ts_print', '__version__']
 
 
-__version__ = "1.0.181113.2"
+__version__ = "1.0.181115.1"
 
 conf_path = []
 
 
-def str_now(timestamp=None):
+def str_datetime(timestamp=None, fmt='%Y-%m-%d %H:%M:%S,%f', start=0, end=23):
     if timestamp:
         dt = datetime.fromtimestamp(timestamp)
     else:
         dt = datetime.now()
-    return dt.strftime('%Y-%m-%d %H:%M:%S,%f')[:23]
+    return dt.strftime(fmt)[start:end]
 
 
 def ts_print(*args, **kwargs):
-    print(str_now(), '[stdout]', *args, **kwargs)
+    print(str_datetime(), '[stdout]', *args, **kwargs)
 
 
 def lookup_conf_file(conf_file):

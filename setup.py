@@ -10,7 +10,7 @@ setup(
     license='Apache-2.0',
     install_requires=install_requires,
     package_data={
-        'tsproxy': ['conf/router.yaml', 'conf/ss-proxy-logging.conf'],
+        'tsproxy': ['conf/router.yaml', 'conf/ss-proxy-logging.conf', 'conf/tsproxy.conf'],
         'simcity': ['conf/simcity_conf.json', 'conf/simcity_logging.conf']
     },
     entry_points="""

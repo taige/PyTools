@@ -20,17 +20,11 @@ async def start_listener(handler, host=None, port=None, *, loop=None, encoder=No
     return await loop.create_server(factory, host, port, backlog=1024, ssl=ssl)
 
 
-def start_connection(handler, host=None, port=None, *, loop=None, encoder=None, decoder=None, connect_timeout=common.default_timeout, local_dns=False, **kwargs):
+def start_connection(handler, ip, port, host=None, *, loop=None, encoder=None, decoder=None, connect_timeout=common.default_timeout, **kwargs):
     if loop is None:
         loop = asyncio.get_event_loop()
-
-    start_time = time.time()
-
-    ip = yield from topendns.async_dns_query(host, raise_on_fail=True, local_dns=local_dns, loop=loop)
-
-    used = time.time() - start_time
-    if used > connect_timeout:
-        raise asyncio.TimeoutError('start_connection timeout, async_dns_query used %.3f seconds' % used)
+    if host is None:
+        host = ip
 
     create_time = time.time()
 
@@ -42,7 +36,7 @@ def start_connection(handler, host=None, port=None, *, loop=None, encoder=None, 
         # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setblocking(False)
         logger.debug('connecting (%s/%s:%d) ...', host, ip, port)
-        with common.Timeout(connect_timeout-used):
+        with common.Timeout(connect_timeout):
             yield from loop.sock_connect(sock, (ip, port))
         logger.debug('connected (%s/%s:%d) used %.3f seconds', host, ip, port, (time.time() - create_time))
     except BaseException as ex:

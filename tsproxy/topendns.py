@@ -276,32 +276,47 @@ def del_cache(addr):
         del cn_addr_cache[addr]
 
 
-def async_dns_query(qname, raise_on_fail=False, local_dns=False, loop=None):
+def async_dns_query(qname, raise_on_fail=False, local_dns=False, ex_func=False, loop=None):
     import asyncio
 
     if loop is None:
         loop = asyncio.get_event_loop()
     update_hosts()
-    ip = dns_query(qname, in_cache=True)
+    if ex_func:
+        func = dns_query_ex
+    else:
+        func = dns_query
+    ip = func(qname, in_cache=True)
     if not ip:
-        ip = yield from loop.run_in_executor(dns_executor, dns_query, qname, raise_on_fail, local_dns)
+        ip = yield from loop.run_in_executor(dns_executor, func, qname, raise_on_fail, local_dns)
 
     return ip
 
 
-def dns_query(qname, raise_on_fail=False, local_dns=False, in_cache=False):
+def dns_query(qname, **kwargs):
+    ips = dns_query_ex(qname, **kwargs)
+    if ips is not None and isinstance(ips, list):
+        if len(ips) > 1:
+            ip = ips.pop(0)
+            ips.append(ip)
+            return ip
+        return ips[0]
+    return ips
+
+
+def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, force_remote=False, **kwargs):
     global dns_cache
     global resolver
     global local_dns_query
     if is_ipv4(qname):
-        return qname
+        return [qname]
     if is_ipv6(qname):
-        return qname
-    if qname in dns_cache:
+        return [qname]
+    if not force_remote and qname in dns_cache:
         return dns_cache[qname]
     # update_hosts()
-    if qname in _hosts:
-        return _hosts[qname]
+    if not force_remote and qname in _hosts:
+        return [_hosts[qname]]
     if in_cache:
         return None
     ex = None
@@ -310,17 +325,22 @@ def dns_query(qname, raise_on_fail=False, local_dns=False, in_cache=False):
     if not local_dns_query and not local_dns:
         try:
             answers = resolver.query(qname)
+            ipv4 = None
             for a in answers:
-                ipv4 = a.to_text()
-                used = time.time() - query_start
-                logger.log(logging.INFO if used < 1 else logging.WARN, 'opendns lookup %s => %s used %.2f sec', qname, ipv4, used)
+                if ipv4 is None:
+                    ipv4 = [a.to_text()]
+                    used = time.time() - query_start
+                else:
+                    ipv4.append(a.to_text())
+            if ipv4 is not None:
                 dns_cache[qname] = ipv4
+                logger.log(logging.INFO if used < 1 else logging.WARN, 'opendns lookup %s => %s used %.2f sec', qname, ipv4, used)
                 return ipv4
         except (NoAnswer, NXDOMAIN, Timeout) as noa:
             ex = noa
         logger.log(logging.INFO, 'opendns lookup %s failed, try local lookup (used %.2f sec)', qname, (time.time() - query_start))
     try:
-        ipv4 = socket.gethostbyname(qname)
+        ipv4 = socket.gethostbyname_ex(qname)[2]
         dns_cache[qname] = ipv4
         if ex is not None:
             logger.info('local lookup result: %s => %s for (%s:%s)', qname, ipv4, ex.__class__.__name__, ex)
@@ -463,4 +483,8 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, print_stack_trace)
     signal.signal(signal.SIGQUIT, print_stack_trace)
 
-    _ipv4 = dns_query('jp01.sss.tf')
+    _is_cn = is_cn_ip(0x03, 'jp.a.cloudss.win')
+    print(_is_cn)
+    for i in range(1, 10):
+        _ipv4 = dns_query_ex('sg.a.cloudss.win', force_remote=True)
+        print(_ipv4)
