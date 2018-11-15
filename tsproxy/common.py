@@ -125,10 +125,10 @@ def load_tsproxy_conf(conf_file):
         speed_lifetime = _common_conf_get(config.getint, "speed_lifetime", speed_lifetime, section="speed_test", remove=True)
         speed_retry_count = _common_conf_get(config.getint, "speed_retry_count", speed_retry_count, section="speed_test", remove=True)
         speed_index_url = _common_conf_get(config.get, "speed_index_url", speed_index_url, section="speed_test", remove=True)
-        _speed_urls = set()
+        _speed_urls = []
         for (k, v) in config.items("speed_test"):
             if k.startswith("http"):
-                _speed_urls.add(k)
+                _speed_urls.append(k)
         if len(_speed_urls) > 0:
             speed_urls.clear()
             speed_urls.extend(_speed_urls)

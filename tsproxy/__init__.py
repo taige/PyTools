@@ -20,7 +20,7 @@ from datetime import datetime
 __all__ = ['lookup_conf_file', 'str_datetime', 'ts_print', '__version__']
 
 
-__version__ = "1.0.181115.2"
+__version__ = "1.0.181115.3"
 
 conf_path = []
 

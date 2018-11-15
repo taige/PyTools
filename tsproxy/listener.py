@@ -484,6 +484,13 @@ class ManageableHttpListener(HttpListener):
         for i in range(0, self.proxy_holder.psize):
             _proxy = self.proxy_holder.proxy_list[i]
             _proxy.print_info(i, out=out, max_count=_max_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
+        out.write('\r\n')
+        for domain in self.proxy_holder.domain_speed_map:
+            for name_ip in sorted(self.proxy_holder.domain_speed_map[domain], key=lambda n: self.proxy_holder.domain_speed_map[domain][n], reverse=True):
+                _speed = common.fmt_human_bytes(self.proxy_holder.domain_speed_map[domain][name_ip])
+                _name, ip = name_ip.split('/')
+                out.write('%s -> %s/%s @%s\r\n' % (domain, _name, ip, _speed))
+                break
 
     def do_head(self, out, host):
         p, _ = self.proxy_holder.find_proxy(host)

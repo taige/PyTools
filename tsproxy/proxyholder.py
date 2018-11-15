@@ -4,6 +4,7 @@ import logging.config
 import os
 import time
 from concurrent.futures import CancelledError
+from urllib.parse import urlparse
 
 import requests
 
@@ -75,6 +76,7 @@ class ProxyHolder(object):
         self.testing_proxy = None
         self.auto_pause_list = set()
         self.speed_urls_idx = 0
+        self.domain_speed_map = {}
 
     @property
     def proxy_names(self):
@@ -342,6 +344,18 @@ class ProxyHolder(object):
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
+    def try_speedup_proxy(self, target_host):
+        if target_host in self.domain_speed_map:
+            for name_ip in sorted(self.domain_speed_map[target_host], key=lambda n: self.domain_speed_map[target_host][n], reverse=True):
+                _speed = common.fmt_human_bytes(self.domain_speed_map[target_host][name_ip])
+                _name, ip = name_ip.split('/')
+                _p, _ = self.find_proxy(_name)
+                if _p is not None:
+                    logger.info('try speedup proxy %s/%s/%s for %s', _name, ip, _speed, target_host)
+                return _p, ip
+        else:
+            return None, None
+
     def _speed_test(self, proxy, speed_threshold=0, timeout=5, bytes_range=None):
         res = None
         MAX_BUF_SIZE_KB = 200
@@ -353,7 +367,6 @@ class ProxyHolder(object):
             'Pragma': 'no-cache',
             'Accept-Language': 'zh-CN,zh;q=0.8'
         }
-        sess = requests.session()
         if common.speed_index_url:
             headers['Referer'] = common.speed_index_url
         if bytes_range:
@@ -369,15 +382,16 @@ class ProxyHolder(object):
             try:
                 for url in common.speed_urls:
                     start = time.time()
-                    res = sess.get(url, headers=headers, timeout=timeout, proxies={
+                    domain = urlparse(url).netloc
+                    res = requests.get(url, headers=headers, timeout=timeout, proxies={
                         "http": "http://127.0.0.1:%d" % self._proxy_port,
                         "https": "http://127.0.0.1:%d" % self._proxy_port
                     }, stream=True)
                     res_len = 0
+                    down_speed = time_past = 0
                     if 200 <= res.status_code < 400:
                         con_len = res.headers.get('content-length', 0)
                         kn = 10
-                        down_speed = time_past = 0
                         while True:
                             buf = res.raw.read(kn * 1024)
                             if not buf:
@@ -395,22 +409,30 @@ class ProxyHolder(object):
                             if kn > MAX_BUF_SIZE_KB:
                                 kn = MAX_BUF_SIZE_KB
                         if proxy_ip in proxy_ip_speed:
-                            proxy_ip_speed[proxy_ip] = (proxy_ip_speed[proxy_ip] + down_speed) / 2
+                            max_speed = max(proxy_ip_speed[proxy_ip], down_speed)
+                            min_speed = min(proxy_ip_speed[proxy_ip], down_speed)
+                            # TODO
+                            if max_speed / min_speed < 3:
+                                proxy_ip_speed[proxy_ip] = (proxy_ip_speed[proxy_ip] + down_speed) / 2
                         else:
                             proxy_ip_speed[proxy_ip] = down_speed
                         # proxy.down_speed = down_speed
                         logger.info('_speed_test(%s/%s) url: %s, used %.1f sec, recv %d/%s bytes, speed: %sB/S, proxy_speed: %sB/s',
                                     proxy.short_hostname, proxy_ip, url, time_past, res_len, con_len,
                                     common.fmt_human_bytes(down_speed), common.fmt_human_bytes(proxy_ip_speed[proxy_ip]))
-                        # 这部分逻辑移到了proxy.down_speed.setter
-                        # if (time.time() - self.last_speed_test_time) > 600:
-                        #     proxy.down_speed = down_speed
-                        # else:
-                        #     proxy.down_speed = (proxy.down_speed + down_speed)/2
-                    else:
-                        # proxy.down_speed = -res.status_code
-                        proxy_ip_speed[proxy_ip] = -res.status_code
+                    elif 400 <= res.status_code < 500:
+                        # 4xx, 不更新速度值
+                        down_speed = proxy.down_speed
+                        proxy_ip_speed[proxy_ip] = proxy.down_speed
                         logger.warning('_speed_test(%s/%s) status_code: %d SHOULD CHANGE URL: %s', proxy.short_hostname, proxy_ip, res.status_code, url)
+                        pass
+                    else:
+                        proxy_ip_speed[proxy_ip] = -res.status_code
+                        logger.warning('_speed_test(%s/%s) fail url: %s status_code: %d', proxy.short_hostname, proxy_ip, url, res.status_code)
+                    if domain in self.domain_speed_map:
+                        self.domain_speed_map[domain][self.testing_proxy] = down_speed
+                    else:
+                        self.domain_speed_map[domain] = {self.testing_proxy: down_speed}
                     res.close()
                     res = None
             except BaseException as ex:
@@ -473,10 +495,11 @@ class ProxyHolder(object):
                     max_speed = _speed
             return _code
 
+        retried = 0
+        move_head = False
         try:
             _may_the_head = sorted(self.proxy_list, key=lambda p: p.total_count, reverse=True)[0]
             logger.info("test_proxies_speed START (_may_the_head=%s)", _may_the_head)
-            retried = 0
             _fix_top = self.fix_top
             self.fix_top = False
             head_proxy = self.head_proxy
@@ -503,7 +526,14 @@ class ProxyHolder(object):
             code = 503
         finally:
             self.speed_testing = False
-        logger.info("test_proxies_speed DONE#%d for move_head=%s[%s]", retried, move_head, self.head_proxy)
+        logger.info("test_proxies_speed DONE#%d for move_head=%s[%s], domain_speed_map=%s", retried, move_head, self.head_proxy, self.domain_speed_map)
+        if logger.isEnabledFor(logging.INFO):
+            for domain in self.domain_speed_map:
+                for name_ip in sorted(self.domain_speed_map[domain], key=lambda n: self.domain_speed_map[domain][n], reverse=True):
+                    _speed = common.fmt_human_bytes(self.domain_speed_map[domain][name_ip])
+                    _name, ip = name_ip.split('/')
+                    logger.info('domain: %s -> proxy %s/%s @%s', domain, _name, ip, _speed)
+                    break
         return code
 
     def find_proxy(self, hostname):

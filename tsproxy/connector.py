@@ -163,7 +163,11 @@ class ProxyConnector(Connector):
                 if proxy is None:
                     raise Exception('NOT FOUND PROXY: %s' % proxy_name)
             else:
-                proxy = self.proxy_holder.head_proxy
+                proxy = None
+                if i == 0 and speed_test_ip is None:
+                    proxy, speed_test_ip = self.proxy_holder.try_speedup_proxy(target_host)
+                if proxy is None:
+                    proxy = self.proxy_holder.head_proxy
                 if (proxy_count - i) > 1:
                     # 每次的超时时间留一半给下一个proxy进行尝试
                     left_time /= 2
@@ -279,7 +283,7 @@ class RouterableConnector(SmartConnector):
         self.yaml_conf_file = common.lookup_conf_file(router_conf)
         self.conf_update_time = 0
         self.yaml_conf_mod = 0
-        self.yaml_conf = {}
+        self.yaml_conf = {'router': []}
         self.load_yaml_conf()
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
