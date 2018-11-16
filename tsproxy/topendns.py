@@ -10,6 +10,7 @@ from dns.resolver import NoAnswer
 from dns.resolver import Resolver
 
 from tsproxy.common import FIFOCache, MyThreadPoolExecutor, lookup_conf_file
+from tsproxy import common
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,6 @@ cn_ip_update = 0
 apnic_file = None
 
 APNIC_LATEST = 'apnic-latest'
-APNIC_LATEST_URL = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
 
 local_dns_query = False
 
@@ -131,21 +131,32 @@ async def update_apnic_latest(raise_on_fail=False, loop=None):
     global apnic_file
     if apnic_file is None:
         apnic_file = lookup_conf_file(APNIC_LATEST)
-    if apnic_file == APNIC_LATEST or (time.time() - os.stat(apnic_file).st_mtime) >= 24*30*3600:
-        # not found
-        done, out_file = await pyclda.aio_download(session=None, url=APNIC_LATEST_URL, out_file=APNIC_LATEST+'.downloading', method='GET', loop=loop)
+    is_exist = os.path.isfile(apnic_file)
+    expired_time = common.apnic_expired_days * 24 * 3600
+    if not is_exist or (time.time() - os.stat(apnic_file).st_mtime) >= expired_time:
+        # not found or expired
+        tmp_filename = apnic_file + '.downloading'
+        done, new_file = await pyclda.aio_download(session=None, url=common.apnic_latest_url, out_file=tmp_filename, method='GET', loop=loop)
         if done:
-            os.rename(out_file, APNIC_LATEST)
-            apnic_file = lookup_conf_file(APNIC_LATEST)
+            if is_exist:
+                # backup old file
+                bak_filename = '%s.%s' % (apnic_file, common.str_datetime(os.stat(apnic_file).st_mtime, fmt='%Y-%m-%d'))
+                os.rename(apnic_file, bak_filename)
+            os.rename(new_file, apnic_file)
+            if not is_exist:
+                apnic_file = lookup_conf_file(APNIC_LATEST)
             load_cn_list()
-            return 24*30*3600
-        elif apnic_file == APNIC_LATEST and raise_on_fail:
-            raise Exception('download %s fail, pls check the log' % APNIC_LATEST)
+            return expired_time
+        elif not is_exist and raise_on_fail:
+            raise Exception('download %s from %s fail, pls check the log' % (APNIC_LATEST, common.apnic_latest_url))
         else:
+            logger.warning('download %s from %s fail, pls check the log' % (APNIC_LATEST, common.apnic_latest_url))
+            if is_exist:
+                load_cn_list()
             return 60
     else:
         load_cn_list()
-        return os.stat(apnic_file).st_mtime + 24*30*3600 - time.time()
+        return os.stat(apnic_file).st_mtime + expired_time - time.time()
 
 
 def update_hosts():

@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 Timeout = timeout
 
+apnic_latest_url = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
+apnic_expired_days = 30
+
 # default timeout seconds for read and connect
 default_timeout = 10
 
@@ -87,6 +90,9 @@ def load_tsproxy_conf(conf_file):
     # use recent 100 response time on calc tp90
     global tp90_calc_count
 
+    global apnic_latest_url
+    global apnic_expired_days
+
     global speed_lifetime
     global speed_retry_count
     global speed_average_threshold
@@ -120,6 +126,9 @@ def load_tsproxy_conf(conf_file):
     fail_rate_threshold = _common_conf_get(config.getfloat, "fail_rate_threshold", fail_rate_threshold)
     tp90_expired_time = _common_conf_get(config.getint, "tp90_expired_time", tp90_expired_time)
     tp90_calc_count = _common_conf_get(config.getint, "tp90_calc_count", tp90_calc_count)
+
+    apnic_latest_url = _common_conf_get(config.get, "apnic_latest_url", apnic_latest_url)
+    apnic_expired_days = _common_conf_get(config.getint, "apnic_expired_days", apnic_expired_days)
 
     if config.has_section("speed_test"):
         if config.has_section('speed_test'):

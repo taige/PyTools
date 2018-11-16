@@ -20,7 +20,7 @@ from datetime import datetime
 __all__ = ['lookup_conf_file', 'str_datetime', 'ts_print', '__version__']
 
 
-__version__ = "1.0.181116.3"
+__version__ = "1.0.181116.4"
 
 conf_path = []
 
@@ -54,7 +54,7 @@ def lookup_conf_file(conf_file):
         ts_print('conf_path=%s' % conf_path, file=sys.stderr, flush=True)
     for path in conf_path:
         if os.path.isdir(path):
-            full_path = path + '/' + conf_file
+            full_path = conf_file if '/' in conf_file else path + '/' + conf_file
             if os.path.isfile(full_path):
                 ts_print('lookup_conf_file: %s -> %s' % (conf_file, full_path), file=sys.stderr, flush=True)
                 return full_path

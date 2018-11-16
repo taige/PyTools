@@ -11,7 +11,7 @@ from concurrent.futures import CancelledError
 
 import uvloop
 
-from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, ts_print, __version__
+from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, ts_print, fmt_human_time, __version__
 from tsproxy.connector import RouterableConnector, CheckConnector
 from tsproxy.listener import ManageableHttpListener, HttpListener
 from tsproxy.proxyholder import ProxyHolder
@@ -105,12 +105,14 @@ async def update_conf(conf_file, logger_conf_file, update_interval=10, loop=None
 async def update_apnic(inital_wait, loop=None):
     wait_to_next = inital_wait
     while True:
+        logger.info('sleep %s to update apnic file', fmt_human_time(wait_to_next))
         await asyncio.sleep(wait_to_next)
         try:
             wait_to_next = await topendns.update_apnic_latest(loop=loop)
         except CancelledError:
             break
         except BaseException as ex:
+            wait_to_next = 60
             logging.exception('update_apnic fail: %s', ex)
 
 
