@@ -29,13 +29,6 @@ is_shutdown = False
 def args_parse(args=None):
     parser = argparse.ArgumentParser(description="Smart Socks5 and Http Proxy with multi background shadowsocks/socks5 proxy",
                                      formatter_class=argparse.RawTextHelpFormatter)
-    group = parser.add_argument_group("query ip/dname's country")
-    group.add_argument('--ip', nargs='+',
-                       help="query ip(s)'s country")
-    group.add_argument('--qname', nargs='+', metavar='DOMAIN-NAME',
-                       help="query domain-name(s)'s country. use 'opendns.com' to DNS query.")
-    group.add_argument('--qnamel', nargs='+', metavar='DOMAIN-NAME',
-                       help="query domain-name(s)'s country. use 'local system' to DNS query.")
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--proxy-all', '-a', action='store_const', dest='smart_mode', const=2,
                        help="proxy all request.")
@@ -55,13 +48,17 @@ def args_parse(args=None):
                         help="socks5 proxy listening port.\ndefault is 7070")
     parser.add_argument('--pid-file', dest='pid_file', default='.ss-proxy.pid',
                         help="file to store the process id.\ndefault filename is '.ss-proxy.pid'.")
+    parser.add_argument('--conf_path', dest='conf_path',
+                        help="config files path, if not specified, default search config files from './' and 'conf/'.")
+    parser.add_argument('--conf_file', dest='conf_file', default='tsproxy.conf',
+                        help="base config file, default is 'tsproxy.conf'.")
     parser.add_argument('--proxy-file', '-f', dest='proxy_file', default='proxies.json',
                         help="dump proxies information to this file on exit,\n"
                              "or load proxies from this file on no proxy hostnames input.\n"
                              "default filename is 'proxies.json'.")
     parser.add_argument('--router', dest='router_conf', default='router.yaml',
                         help="router config file using YAML format, default is 'router.yaml'.")
-    parser.add_argument('--logger_conf', dest='logger_conf',
+    parser.add_argument('--logger_conf', dest='logger_conf', default='ss-proxy-logging.conf',
                         help="logger config file, default is 'ss-proxy-logging.conf'.")
     parser.add_argument('hostnames', metavar='proxy', nargs='*',
                         help='use "hostname:port" to define a socks5 proxy, \n'
@@ -117,13 +114,23 @@ async def update_apnic(inital_wait, loop=None):
 
 
 def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='proxies.json', pid_file='.ss-proxy.pid', smart_mode=1, **kwargs):
+    from tsproxy import conf_path
+    global conf_path
     global conf_file_mod
     global logger_conf_mod
     _startup = False
 
-    logger_conf_file = 'ss-proxy-logging.conf'
-    if 'logger_conf' in kwargs and kwargs['logger_conf']:
-        logger_conf_file = kwargs.pop('logger_conf')
+    _conf_path = kwargs.pop('conf_path', None)
+    if _conf_path:
+        if not os.path.isdir(_conf_path):
+            raise Exception('conf_path=%s not found' % _conf_path)
+        if not _conf_path.startswith('/'):
+            _conf_path = os.getcwd() + '/' + _conf_path
+        conf_path.append(_conf_path)
+        conf_path.append(os.getcwd())
+        ts_print('conf_path=%s' % conf_path)
+
+    logger_conf_file = kwargs.pop('logger_conf', 'ss-proxy-logging.conf')
     logger_conf_file = lookup_conf_file(logger_conf_file)
     try:
         logger_conf_mod = os.stat(logger_conf_file).st_mtime
@@ -133,9 +140,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
         logging.basicConfig(format='%(asctime)s %(levelname)-5s [%(threadName)-14s] %(name)-16s - %(message)s', level=logging.DEBUG)
         logging.exception('fileConfig(%s) fail: %s', logger_conf_file, ex_log)
 
-    _conf_file = 'tsproxy.conf'
-    if 'conf_file' in kwargs and kwargs['conf_file']:
-        _conf_file = kwargs.pop('conf_file')
+    _conf_file = kwargs.pop('conf_file', 'tsproxy.conf')
     _conf_file = lookup_conf_file(_conf_file)
     try:
         conf_file_mod = os.stat(_conf_file).st_mtime
@@ -144,6 +149,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
     except BaseException as ex_conf:
         logging.exception('load_tsproxy_conf(%s) fail: %s', _conf_file, ex_conf)
 
+    proxy_file = lookup_conf_file(proxy_file)
     try:
         with open(proxy_file, 'r') as f:
             j_in = json.load(f)

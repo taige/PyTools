@@ -14,7 +14,7 @@ from configparser import ConfigParser
 
 from async_timeout import timeout
 
-from tsproxy import *
+from tsproxy import lookup_conf_file, str_datetime, ts_print, __version__
 
 logger = logging.getLogger(__name__)
 
