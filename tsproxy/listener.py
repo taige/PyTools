@@ -264,6 +264,7 @@ class ManageableHttpListener(HttpListener):
         parser.add_argument('--help', action='store_true', default=False, help="print this help")
         parser.add_argument('--conn', action='store_true', default=False, help="list current connections")
         parser.add_argument('--list', action='store_true', default=False, help="list proxies information")
+        parser.add_argument('--domain', action='store_true', default=False, help="show domain speed route table")
         parser.add_argument('--insert', metavar='proxy-info', nargs='+', dest='inss',
                             help='use "hostname:port/short-name" to insert a socks5 proxy to list head, \n'
                                  '"passord/method@hostname:server_port" or "hostname" to insert a shadowsocks proxy.\n'
@@ -284,7 +285,6 @@ class ManageableHttpListener(HttpListener):
         parser.add_argument('--dump', action='store_true', dest='dump', default=False, help="dump proxy info to file")
         parser.add_argument('--speed', metavar='hostname', nargs='*', dest='speed', help='test the proxy/proxies speed with background mode')
         parser.add_argument('--fspeed', metavar='hostname', nargs='*', dest='fspeed', help='test the proxy/proxies speed with foreground mode')
-        # parser.add_argument('--speed', metavar='hostname', nargs='*', dest='speeds', help='test the proxy/proxies speed')
         parser.add_argument('--top', metavar='hostname', nargs=1, dest='top', help='fix the proxy to list top')
         parser.add_argument('--untop', action='store_true', dest='untop', default=False, help="unfix the top proxy")
         return parser
@@ -370,7 +370,9 @@ class ManageableHttpListener(HttpListener):
             cookie = yield from self.do_speed(out, cmd.fspeed, True)  # cmd.speed)
         if cmd.dump or cmd.inss or cmd.adds or cmd.dels or cmd.pauses:
             self.do_dump(out)
-        if not cmd.help and not cmd.stack:
+        if cmd.domain:
+            self.do_domain(out)
+        if not cmd.help and not cmd.stack and not cmd.domain:
             self.do_list(out, cmd.fspeed if user_agent is not None and 'curl' in user_agent else None)
         return cookie
 
@@ -485,7 +487,8 @@ class ManageableHttpListener(HttpListener):
         for i in range(0, self.proxy_holder.psize):
             _proxy = self.proxy_holder.proxy_list[i]
             _proxy.print_info(i, out=out, max_total_count=_max_total_count, max_sess_count=_max_sess_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
-        out.write('\r\n')
+
+    def do_domain(self, out):
         self.proxy_holder.print_domain_speed(fmt='%-20s -> %s/%-15s @%-6s S=%s\r\n', out=out)
 
     def do_head(self, out, host):
