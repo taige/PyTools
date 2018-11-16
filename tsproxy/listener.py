@@ -477,20 +477,16 @@ class ManageableHttpListener(HttpListener):
                 out.write('\nError: %s DID NOT in proxy list\n\n' % host)
 
     def do_list(self, out, high_light_proxies=None):
-        out.write('global tp90: %.1f/%d/%d\r\n' % (tsproxy.proxy.ProxyStat.calc_tp90(),
-                                                   tsproxy.proxy.ProxyStat.global_tp90_len,
-                                                   tsproxy.proxy.ProxyStat.global_resp_count))
-        _max_count = sorted(self.proxy_holder.proxy_list, key=lambda p: p.total_count, reverse=True)[0].total_count
+        out.write('global tp90: %.1fs/%d/%d\r\n' % (tsproxy.proxy.ProxyStat.calc_tp90(),
+                                                    tsproxy.proxy.ProxyStat.global_tp90_len,
+                                                    tsproxy.proxy.ProxyStat.global_resp_count))
+        _max_total_count = sorted(self.proxy_holder.proxy_list, key=lambda p: p.total_count, reverse=True)[0].total_count
+        _max_sess_count = sorted(self.proxy_holder.proxy_list, key=lambda p: p.proxy_count, reverse=True)[0].proxy_count
         for i in range(0, self.proxy_holder.psize):
             _proxy = self.proxy_holder.proxy_list[i]
-            _proxy.print_info(i, out=out, max_count=_max_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
+            _proxy.print_info(i, out=out, max_total_count=_max_total_count, max_sess_count=_max_sess_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
         out.write('\r\n')
-        for domain in self.proxy_holder.domain_speed_map:
-            for name_ip in sorted(self.proxy_holder.domain_speed_map[domain], key=lambda n: self.proxy_holder.domain_speed_map[domain][n], reverse=True):
-                _speed = common.fmt_human_bytes(self.proxy_holder.domain_speed_map[domain][name_ip])
-                _name, ip = name_ip.split('/')
-                out.write('%s -> %s/%s @%s\r\n' % (domain, _name, ip, _speed))
-                break
+        self.proxy_holder.print_domain_speed(fmt='%-20s -> %s/%-15s @%-6s S=%s\r\n', out=out)
 
     def do_head(self, out, host):
         p, _ = self.proxy_holder.find_proxy(host)
@@ -513,7 +509,6 @@ class ManageableHttpListener(HttpListener):
         self.proxy_holder.fix_top = False
 
     def do_dump(self, out):
-        # self.proxy_holder.dump_proxys()
         if self._dump_config is not None:
             self._dump_config()
 

@@ -153,7 +153,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
     loop = asyncio.get_event_loop()
     proxy_holder = ProxyHolder(http_port+1, proxy_file=proxy_file)
     if not proxies:
-        proxy_holder.load_proxies(j_in)
+        proxy_holder.load_json(j_in)
     else:
         proxy_holder.add_proxies(proxies)
 
@@ -192,7 +192,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
     def dump_config():
         j_dump = {}
         http_proxy.dump_acl(j_dump)
-        proxy_holder.dump_proxys(j_dump)
+        proxy_holder.dump_json(j_dump)
         with open(proxy_file + '.ing', 'w') as pf:
             json.dump(j_dump, pf, indent=2, sort_keys=True)
         os.rename(proxy_file + '.ing', proxy_file)

@@ -452,7 +452,7 @@ def load_cn_list(only_cn=True):
         logger.info('%s loaded', apnic_file)
     except FileNotFoundError:
         cn_ip_update = time.time() + 60
-        logger.warning('file not found: %s', apnic_file)
+        logger.error('file not found: %s', apnic_file)
         apnic_file = lookup_conf_file(APNIC_LATEST)
     except BaseException as ex_apnic:
         logging.exception('load_cn_list(only_cn=%s) fail: %s', only_cn, ex_apnic)

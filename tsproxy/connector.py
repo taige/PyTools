@@ -237,20 +237,21 @@ class SmartConnector(Connector):
             connector = self.proxy_connector
         else:
             atype = 0x01 if topendns.is_ipv4(target_host) else 0x04 if topendns.is_ipv6(target_host) else 0x03
-            if atype == 0x03:  # domain
-                if topendns.is_foreign_domain(target_host):
-                    connector = self.proxy_connector
-                elif topendns.is_cn_domain(target_host):
-                    connector = self.direct_connector
-            if connector is None:
-                if atype == 0x03:
-                    ip = yield from topendns.async_dns_query(target_host, loop=self._loop)
-                else:
-                    ip = target_host
-                if ip is not None and topendns.is_cn_ip(0x01 if topendns.is_ipv4(ip) else 0x04, ip):
-                    connector = self.direct_connector
-                else:
-                    connector = self.proxy_connector
+            # 配置导入的CN或国外域名的配置通过RouterableConnector的yaml配置文件来实现
+            # if atype == 0x03:  # domain
+            #     if topendns.is_foreign_domain(target_host):
+            #         connector = self.proxy_connector
+            #     elif topendns.is_cn_domain(target_host):
+            #         connector = self.direct_connector
+            # if connector is None:
+            if atype == 0x03:
+                ip = yield from topendns.async_dns_query(target_host, loop=self._loop)
+            else:
+                ip = target_host
+            if ip is not None and topendns.is_cn_ip(0x01 if topendns.is_ipv4(ip) else 0x04, ip):
+                connector = self.direct_connector
+            else:
+                connector = self.proxy_connector
         return (yield from connector.connect(peer, target_host, target_port, proxy_name, loop, **kwargs))
 
 
@@ -325,12 +326,13 @@ class RouterableConnector(SmartConnector):
                     _conf = yaml.load(f)
                 _conf.setdefault('router', [])
                 if not self.check_yaml_conf(_conf):
-                    logger.warning('%s load FAIL!', self.yaml_conf_file)
+                    logger.error('%s load FAIL!', self.yaml_conf_file)
                     return
                 self.yaml_conf = _conf
                 logger.info('%s reloaded', self.yaml_conf_file)
-        except BaseException as e:
+        except BaseException as ex:
             self.conf_update_time = time.time() + 10 * 60
+            logging.exception('load_yaml_conf(%s) fail: %s', self.yaml_conf_file, ex)
 
     def port_value_is_int(self, value):
         if isinstance(value, int):
@@ -467,6 +469,6 @@ class CheckConnector(ProxyConnector):
         super().__init__(proxy_holder=proxy_holder, loop=loop)
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
-        logger.debug("speed_testing_proxy=%s", self.proxy_holder.testing_proxy)
-        proxy_name, proxy_ip = self.proxy_holder.testing_proxy.split('/') if '/' in self.proxy_holder.testing_proxy else (self.proxy_holder.testing_proxy, None)
+        logger.debug("speed_testing_proxy=%s", self.proxy_holder.speeding_proxy)
+        proxy_name, proxy_ip = self.proxy_holder.speeding_proxy.split('/') if '/' in self.proxy_holder.speeding_proxy else (self.proxy_holder.speeding_proxy, None)
         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, speed_test_ip=proxy_ip, **kwargs))

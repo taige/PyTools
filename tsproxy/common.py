@@ -52,8 +52,9 @@ tp90_calc_count = 100
 speed_lifetime = 12 * 3600
 
 speed_retry_count = 2
+speed_average_threshold = 100
 speed_index_url = 'https://www.tumblr.com/'
-speed_urls = ['https://ve.media.tumblr.com/tumblr_pfwg4l558b1sq04bj_480.mp4', 'https://vtt.tumblr.com/tumblr_pf98cpiaq61x9cgqk.mp4']
+speed_urls = ['https://ve.media.tumblr.com/tumblr_pfwg4l558b1sq04bj_480.mp4', 'https://vtt.tumblr.com/tumblr_pf98cpiaq61x9cgqk.mp4', 'https://vt.media.tumblr.com/tumblr_olmzaj26fj1qlmvfe_480.mp4']
 
 speed_hosts = set()
 speed_black_hosts = set()
@@ -88,6 +89,7 @@ def load_tsproxy_conf(conf_file):
 
     global speed_lifetime
     global speed_retry_count
+    global speed_average_threshold
     global speed_index_url
     global speed_urls
 
@@ -124,6 +126,7 @@ def load_tsproxy_conf(conf_file):
             logger.info('tsproxy.conf: [speed_test] %s', config.items('speed_test'))
         speed_lifetime = _common_conf_get(config.getint, "speed_lifetime", speed_lifetime, section="speed_test", remove=True)
         speed_retry_count = _common_conf_get(config.getint, "speed_retry_count", speed_retry_count, section="speed_test", remove=True)
+        speed_average_threshold = _common_conf_get(config.getint, "speed_average_threshold", speed_average_threshold, section="speed_test", remove=True)
         speed_index_url = _common_conf_get(config.get, "speed_index_url", speed_index_url, section="speed_test", remove=True)
         _speed_urls = []
         for (k, v) in config.items("speed_test"):

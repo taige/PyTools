@@ -296,7 +296,7 @@ class StreamReader(asyncio.StreamReader):
             self._recv_bytes += len(data)
             self._active_time = time.time()
         else:
-            logger.info('feed_data after feed_eof is NOT allow')
+            logger.debug('feed_data after feed_eof is NOT allow')
 
     def read_bytes(self, size=None, read_timeout=common.default_timeout, exactly=False):
         if size is None or size <= 0:

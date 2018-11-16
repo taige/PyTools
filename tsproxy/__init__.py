@@ -20,7 +20,7 @@ from datetime import datetime
 __all__ = ['lookup_conf_file', 'str_datetime', 'ts_print', '__version__']
 
 
-__version__ = "1.0.181115.3"
+__version__ = "1.0.181116.2"
 
 conf_path = []
 
@@ -34,7 +34,12 @@ def str_datetime(timestamp=None, fmt='%Y-%m-%d %H:%M:%S,%f', start=0, end=23):
 
 
 def ts_print(*args, **kwargs):
-    print(str_datetime(), '[stdout]', *args, **kwargs)
+    file = kwargs.get('file', None)
+    kwargs.setdefault('flush', True)
+    if file is not None and file is sys.stderr:
+        print(str_datetime(), '[stderr]', *args, **kwargs)
+    else:
+        print(str_datetime(), '[stdout]', *args, **kwargs)
 
 
 def lookup_conf_file(conf_file):

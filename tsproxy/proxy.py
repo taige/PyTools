@@ -4,7 +4,7 @@ import logging
 import os
 import socket
 import time
-from datetime import datetime
+import copy
 from io import BytesIO
 
 try:
@@ -73,6 +73,10 @@ class ProxyStat(dict):
         if 'down_speed' not in self or 'down_speed_settime' not in self or (time.time() - self['down_speed_settime']) > common.speed_lifetime:
             self['down_speed'] = 0
         return self['down_speed']
+
+    @property
+    def down_speed_settime(self):
+        return self['down_speed_settime'] if 'down_speed_settime' in self else 0
 
     @property
     def realtime_speed(self):
@@ -563,20 +567,20 @@ class Proxy(ProxyStat):
     def init_connection(self, connection, host, port, **kwargs):
         pass
 
-    def print_info(self, index=None, force_print=True, out=None, high_light=False, max_count=6):
+    def print_info(self, index=None, force_print=True, out=None, high_light=False, max_total_count=6, max_sess_count=3):
         if self.total_count > 0 or self.proxy_count > 0 or force_print:
             fr1 = 100*(0 if self.total_count == 0 else self.total_fail/self.total_count)
             fr2 = 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count)
-            _max_len = len(format(max_count, ','))
-            count_fmt = '%%-%ds' % _max_len
-            output = "PROXY%4s %s %-20s %-13s count=%s/%s|%3d/%s" % \
+            count_fmt1 = '%%%ds' % len(format(max_total_count, ','))
+            count_fmt2 = '%%%ds' % len(format(max_sess_count, ','))
+            output = "PROXY%4s %s %-20s %-13s count=%s/%s|%s/%s" % \
                      ('' if index is None else '[%2d]' % index,
                       '~' if self.pause and self.hostname in self.proxy_monitor.auto_pause_list else '=' if self.pause else '>',
                       '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
-                      'tp90=%.1f/%d' % (self.tp90, self.tp90_len),
-                      count_fmt % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
+                      'tp90=%.1fs/%d' % (self.tp90, self.tp90_len),
+                      count_fmt1 % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
                       ('f%.0f.%%' if fr1 >= 10 else 'f%.1f%%') % fr1,
-                      self.proxy_count,
+                      count_fmt2 % format(self.proxy_count, ','),
                       ('f%.0f.%%' if fr2 >= 10 else 'f%.1f%%') % fr2
                       )
             if 'down_speed_settime' in self and (time.time() - self['down_speed_settime']) < 24*3600:
@@ -641,10 +645,18 @@ class Proxy(ProxyStat):
     @resolved_addr.setter
     def resolved_addr(self, addr):
         if 'resolved_addr' in self:
-            if sorted(addr[0]) != sorted(self.resolved_addr[0]):  # ip 有变更，重置统计数据
+            if sorted(addr[0]) != sorted(self.resolved_addr[0]):  # ip 有变更
+                # remove domain speed map data
+                for ip in self.resolved_addr[0]:
+                    if ip not in addr[0]:
+                        self.proxy_monitor.remove_proxy_from_domain_speed(self, ip)
+                # 重置统计数据
                 self.total_count = self.proxy_count
                 self.total_fail = self.fail_count
-        self['resolved_addr'] = addr
+                # deep copy
+                self['resolved_addr'] = copy.deepcopy(addr)
+        else:
+            self['resolved_addr'] = copy.deepcopy(addr)
 
     @property
     def forward_flag(self):
