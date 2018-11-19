@@ -11,6 +11,7 @@ import time
 import traceback
 from io import StringIO
 from configparser import ConfigParser
+from urllib.parse import urlparse
 
 from async_timeout import timeout
 
@@ -58,6 +59,7 @@ speed_retry_count = 2
 speed_average_threshold = 100
 speed_index_url = 'https://www.tumblr.com/'
 speed_urls = ['https://ve.media.tumblr.com/tumblr_pfwg4l558b1sq04bj_480.mp4', 'https://vtt.tumblr.com/tumblr_pf98cpiaq61x9cgqk.mp4', 'https://vt.media.tumblr.com/tumblr_olmzaj26fj1qlmvfe_480.mp4']
+speed_domains = set()
 
 speed_hosts = set()
 speed_black_hosts = set()
@@ -98,6 +100,7 @@ def load_tsproxy_conf(conf_file):
     global speed_average_threshold
     global speed_index_url
     global speed_urls
+    global speed_domains
 
     config = ConfigParser(allow_no_value=True, delimiters=('='))
     config.read(conf_file)
@@ -144,6 +147,10 @@ def load_tsproxy_conf(conf_file):
         if len(_speed_urls) > 0:
             speed_urls.clear()
             speed_urls.extend(_speed_urls)
+    speed_domains.clear()
+    for url in speed_urls:
+        domain = urlparse(url).netloc
+        speed_domains.add(domain)
 
 
 def update_speed_hosts():

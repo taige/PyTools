@@ -338,7 +338,7 @@ class ProxyHolder(object):
         return network_is_ok
 
     def try_speedup_proxy(self, target_host):
-        if target_host in self.domain_speed_map:
+        if target_host in self.domain_speed_map and target_host in common.speed_domains:
             for name_ip in sorted(self.domain_speed_map[target_host], key=lambda n: self.domain_speed_map[target_host][n], reverse=True):
                 _speed = fmt_human_bytes(self.domain_speed_map[target_host][name_ip])
                 _name, ip = name_ip.split('/')
@@ -530,6 +530,10 @@ class ProxyHolder(object):
     def print_domain_speed(self, fmt='domain: %s -> proxy %s/%s @%s S=%s', out=None):
         if out is not None or logger.isEnabledFor(logging.INFO):
             for domain in sorted(self.domain_speed_map):
+                # clear deleted speed domain
+                if domain not in common.speed_domains:
+                    del self.domain_speed_map[domain]
+                    continue
                 for name_ip in sorted(self.domain_speed_map[domain], key=lambda n: self.domain_speed_map[domain][n], reverse=True):
                     _max_speed = fmt_human_bytes(self.domain_speed_map[domain][name_ip])
                     _name, ip = name_ip.split('/')

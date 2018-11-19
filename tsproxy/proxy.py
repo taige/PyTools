@@ -573,7 +573,7 @@ class Proxy(ProxyStat):
             fr2 = 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count)
             count_fmt1 = '%%%ds' % len(format(max_total_count, ','))
             count_fmt2 = '%%%ds' % len(format(max_sess_count, ','))
-            output = "PROXY%4s %s %-20s %-13s count=%s/%s|%s/%s" % \
+            output = "PROXY%4s %s %-20s %-14s count=%s/%s|%s/%s" % \
                      ('' if index is None else '[%2d]' % index,
                       '~' if self.pause and self.hostname in self.proxy_monitor.auto_pause_list else '=' if self.pause else '>',
                       '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
