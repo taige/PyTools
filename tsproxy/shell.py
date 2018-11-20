@@ -11,7 +11,7 @@ from concurrent.futures import CancelledError
 
 import uvloop
 
-from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, ts_print, fmt_human_time, __version__
+from tsproxy.common import print_stack_trace, lookup_conf_file, load_tsproxy_conf, ts_print, fmt_human_time, clazz_fullname, __version__
 from tsproxy.connector import RouterableConnector, CheckConnector
 from tsproxy.listener import ManageableHttpListener, HttpListener
 from tsproxy.proxyholder import ProxyHolder
@@ -185,7 +185,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
             for t in asyncio.Task.all_tasks():
                 t.cancel()
         except BaseException as ex1:
-            logger.exception('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
+            logger.exception('term_handler error: %s(%s)', clazz_fullname(ex1), ex1)
         finally:
             is_shutdown = True
             if _startup:

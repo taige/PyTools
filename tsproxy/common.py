@@ -47,6 +47,8 @@ tp90_inc_threshold = 0.5
 global_tp90_threshold = 1.9
 # fail rate threshold
 fail_rate_threshold = 0.2
+# auto pause fail rate threshold
+auto_pause_fail_rate_threshold = 0.3
 # response time expired after 3 hour on calc tp90
 tp90_expired_time = 3600*3
 # use recent 100 response time on calc tp90
@@ -55,6 +57,7 @@ tp90_calc_count = 100
 # speed test result lifetime
 speed_lifetime = 12 * 3600
 
+speed_test_timeout = 5
 speed_retry_count = 2
 speed_average_threshold = 100
 speed_index_url = 'https://www.tumblr.com/'
@@ -87,6 +90,8 @@ def load_tsproxy_conf(conf_file):
     global global_tp90_threshold
     # fail rate threshold
     global fail_rate_threshold
+    # auto pause fail rate threshold
+    global auto_pause_fail_rate_threshold
     # response time expired after 3 hour on calc tp90
     global tp90_expired_time
     # use recent 100 response time on calc tp90
@@ -96,6 +101,7 @@ def load_tsproxy_conf(conf_file):
     global apnic_expired_days
 
     global speed_lifetime
+    global speed_test_timeout
     global speed_retry_count
     global speed_average_threshold
     global speed_index_url
@@ -127,6 +133,7 @@ def load_tsproxy_conf(conf_file):
     tp90_inc_threshold = _common_conf_get(config.getfloat, "tp90_inc_threshold", tp90_inc_threshold)
     global_tp90_threshold = _common_conf_get(config.getfloat, "global_tp90_threshold", global_tp90_threshold)
     fail_rate_threshold = _common_conf_get(config.getfloat, "fail_rate_threshold", fail_rate_threshold)
+    auto_pause_fail_rate_threshold = _common_conf_get(config.getfloat, "auto_pause_fail_rate_threshold", auto_pause_fail_rate_threshold)
     tp90_expired_time = _common_conf_get(config.getint, "tp90_expired_time", tp90_expired_time)
     tp90_calc_count = _common_conf_get(config.getint, "tp90_calc_count", tp90_calc_count)
 
@@ -138,6 +145,7 @@ def load_tsproxy_conf(conf_file):
             logger.info('tsproxy.conf: [speed_test] %s', config.items('speed_test'))
         speed_lifetime = _common_conf_get(config.getint, "speed_lifetime", speed_lifetime, section="speed_test", remove=True)
         speed_retry_count = _common_conf_get(config.getint, "speed_retry_count", speed_retry_count, section="speed_test", remove=True)
+        speed_test_timeout = _common_conf_get(config.getfloat, "speed_test_timeout", speed_test_timeout, section="speed_test", remove=True)
         speed_average_threshold = _common_conf_get(config.getint, "speed_average_threshold", speed_average_threshold, section="speed_test", remove=True)
         speed_index_url = _common_conf_get(config.get, "speed_index_url", speed_index_url, section="speed_test", remove=True)
         _speed_urls = []
@@ -151,6 +159,14 @@ def load_tsproxy_conf(conf_file):
     for url in speed_urls:
         domain = urlparse(url).netloc
         speed_domains.add(domain)
+
+
+def clazz_fullname(obj):
+    _module = obj.__class__.__module__
+    _name = obj.__class__.__name__
+    if _module == 'builtin':
+        return _name
+    return '%s.%s' % (_module, _name)
 
 
 def update_speed_hosts():
@@ -509,7 +525,7 @@ class MyThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
                 logger.log(5, '%s STOP', threading.current_thread().name)
                 return result
             except BaseException as ex:
-                logger.info('%s STOP with %s: %s', threading.current_thread().name, ex.__class__.__name__, ex)
+                logger.info('%s STOP with %s: %s', threading.current_thread().name, clazz_fullname(ex), ex)
                 raise ex
 
     def _func_wrapper_by_order(self, func_queue, func_hash_key):
@@ -536,7 +552,7 @@ class MyThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             except BaseException as ex:
                 if _future:
                     _future.set_exception(ex)
-                logger.info('%s WORK DONE with %s: %s', threading.current_thread().name, ex.__class__.__name__, ex)
+                logger.info('%s WORK DONE with %s: %s', threading.current_thread().name, clazz_fullname(ex), ex)
 
 
 def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, on_data_recv=None, on_idle=None):
@@ -561,7 +577,7 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
             else:
                 break
         except ConnectionError as conn_err:
-            logger.info("forward_forever(%s) %s: %s", connection, conn_err.__class__.__name__, conn_err)
+            logger.info("forward_forever(%s) %s: %s", connection, clazz_fullname(conn_err), conn_err)
             break
         except asyncio.TimeoutError:
             idle_time = connection.idle_time  # time.time() - idle_start

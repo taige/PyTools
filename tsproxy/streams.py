@@ -82,7 +82,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                 _client = _socket.getpeername()
                 _server = _socket.getsockname()
             except Exception as ex1:
-                logger.warning("handle socket %s %s: %s", _socket, ex1.__class__.__name__, ex1)
+                logger.warning("handle socket %s %s: %s", _socket, common.clazz_fullname(ex1), ex1)
                 # _close_sock_slient(_socket)
                 return
             laddr = _client[0]
@@ -108,7 +108,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                     try:
                         yield from res
                     except BaseException as ex:
-                        logger.exception("handle connect %s %s: %s", self._connection, ex.__class__.__name__, ex)
+                        logger.exception("handle connect %s %s: %s", self._connection, common.clazz_fullname(ex), ex)
                     finally:
                         try:
                             if self._connection.reader.exception() is None and not self._connection_lost \
@@ -116,7 +116,7 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                                 yield from self._connection.writer.drain()
                             self._connection.writer.close()
                         except ConnectionError as ex:
-                            logger.exception("handle connect %s %s: %s", self._connection, ex.__class__.__name__, ex)
+                            logger.exception("handle connect %s %s: %s", self._connection, common.clazz_fullname(ex), ex)
                         # logger.info('%s lived %.2f seconds (%d)', self._connection, self._connection.life_time, StreamProtocol._connection_counter)
                 self._loop.create_task(wrapper())
         StreamProtocol._connection_counter += 1
@@ -317,7 +317,7 @@ class StreamReader(asyncio.StreamReader):
         #     logger.debug("%s read_bytes(%s %d %s) %s: %s", self._connection, size, read_timeout, exactly, ex1.__class__.__name__, ex1)
         #     return None
         except ConnectionError as ex1:
-            logger.debug("%s read_bytes(%s %d %s) %s: %s", self._connection, size, read_timeout, exactly, ex1.__class__.__name__, ex1)
+            logger.debug("%s read_bytes(%s %d %s) %s: %s", self._connection, size, read_timeout, exactly, common.clazz_fullname(ex1), ex1)
             return None
 
     def read(self, n=None, read_timeout=common.default_timeout):

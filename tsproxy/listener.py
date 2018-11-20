@@ -127,7 +127,7 @@ class HttpListener(Listener):
         except psutil.AccessDenied:
             self._root_access = False
         except BaseException as ex:
-            logger.exception("%s get_connection_process fail: %s(%s)", connection, ex.__class__.__name__, ex)
+            logger.exception("%s get_connection_process fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
 
     def do_forward(self, connection):
         if HTTP_REQUEST in connection:
@@ -136,7 +136,7 @@ class HttpListener(Listener):
             try:
                 head_request = yield from connection.reader.read()
             except Exception as ex:
-                logger.info("%s head request fail: %s(%s)", connection, ex.__class__.__name__, ex)
+                logger.info("%s head request fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
                 return False
 
         if not head_request:
@@ -167,15 +167,15 @@ class HttpListener(Listener):
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, 'Connect proxy timeout(TSP)'))
             return False
         except socket.gaierror as ex:
-            logger.debug("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, ex.__class__.__name__, ex)
+            logger.debug("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, common.clazz_fullname(ex), ex)
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, 'Dns(%s) fail(TSP)' % host))
             return False
         except ConnectionError as ex:
-            logger.info("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, ex.__class__.__name__, ex)
+            logger.info("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, common.clazz_fullname(ex), ex)
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, '%s(TSP)' % ex.strerror))
             return False
         except BaseException as ex:
-            logger.exception("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, ex.__class__.__name__, ex)
+            logger.exception("%s connector.connect to %s:%d fail: %s(%s)", connection, host, port, common.clazz_fullname(ex), ex)
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503))
             return False
 
@@ -308,7 +308,7 @@ class ManageableHttpListener(HttpListener):
                     code = yield from self.do_command(cmd_line, out, connection, ua)
                 except Exception as pe:
                     code = 500
-                    logger.exception("do_command(%s) error: %s(%s)", cmd_line, pe.__class__.__name__, pe)
+                    logger.info("do_command(%s) error: %s(%s)", request.url.path, common.clazz_fullname(pe), pe)
                     out.write('%s\n\n' % pe)
                     self.print_help(out)
                 out.write('\nS=%s\nTSProxy v%s %s\n' % (str_datetime(self.proxy_holder.last_speed_test_time), __version__, str_datetime()))
@@ -556,7 +556,7 @@ class HttpRequestDecoder(streams.Decoder):
             else:
                 request = httphelper.bad_request(timeout=read_timeout, request_time=start_time)
         except Exception as ex:
-            logger.exception("%s parse_request fail: %s(%s)", connection, ex.__class__.__name__, ex)
+            logger.exception("%s parse_request fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
             return None
         if request:
             # if HTTP_RESPONSE in connection:

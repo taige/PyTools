@@ -115,6 +115,7 @@ class HttpRequestParser(HttpParser):
     def parse_request(self, reader, raw_data=b'', read_timeout=common.default_timeout):
         # read HTTP message (request line + headers)
         request_time = time.time()
+        request_line = method = version = url = close = None
         try:
             with common.Timeout(read_timeout):
                 if raw_data and raw_data.find(b'\r\n') > 0:

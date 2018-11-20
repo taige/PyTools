@@ -103,8 +103,8 @@ class ProxyStat(dict):
 
     @down_speed.setter
     def down_speed(self, d_speed):
-        # 1 分钟内的速度取平均值
-        if d_speed < 0 or 'down_speed_settime' not in self or (time.time() - self['down_speed_settime']) > 60:
+        # 10 分钟内的速度取平均值
+        if d_speed < 0 or 'down_speed_settime' not in self or (time.time() - self['down_speed_settime']) > 600:
             self['down_speed'] = d_speed
         else:
             self['down_speed'] = (self.down_speed + d_speed)/2
@@ -646,6 +646,7 @@ class Proxy(ProxyStat):
     def resolved_addr(self, addr):
         if 'resolved_addr' in self:
             if sorted(addr[0]) != sorted(self.resolved_addr[0]):  # ip 有变更
+                logger.info('proxy(%s) ip changed, from %s to %s', self.short_hostname, self.resolved_addr[0], addr[0])
                 # remove domain speed map data
                 for ip in self.resolved_addr[0]:
                     if ip not in addr[0]:
@@ -817,7 +818,7 @@ class Socks5Proxy(Proxy):
         except ProxyConnectInitError:
             raise
         except Exception as ex:
-            logger.exception('%s init socks5 connect fail@%d %s: %s', connection, flag, ex.__class__.__name__, ex)
+            logger.exception('%s init socks5 connect fail@%d %s: %s', connection, flag, common.clazz_fullname(ex), ex)
             raise ProxyConnectInitError(flag, 'init socks5 connect fail@%d' % flag)
 
 
@@ -896,7 +897,7 @@ class ShadowsocksProxy(Proxy):
         except ProxyConnectInitError:
             raise
         except Exception as ex:
-            logger.exception('%s init socks5 connect fail@%d %s: %s', connection, flag, ex.__class__.__name__, ex)
+            logger.exception('%s init socks5 connect fail@%d %s: %s', connection, flag, common.clazz_fullname(ex), ex)
             raise ProxyConnectInitError(flag, 'init socks5 connect fail@%d' % flag)
 
     def new_encryptor(self):
@@ -959,7 +960,7 @@ class ShadowsocksDecoder(streams.Decoder):
         except asyncio.TimeoutError:
             raise
         except Exception as ex:
-            logger.exception("%s shadowsocks read fail: %s(%s)", connection, ex.__class__.__name__, ex)
+            logger.exception("%s shadowsocks read fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
             return None
         dec = self._shadws_proxy.do_decrypt(connection, data)
         logger.log(5, 'do_decrypt %s -> %s', data[:40], dec[:40])
@@ -1024,5 +1025,5 @@ class HttpProxy(Proxy):
         except ProxyConnectInitError:
             raise
         except Exception as ex:
-            logger.exception('%s init https connection fail@%d %s: %s', connection, flag, ex.__class__.__name__, ex)
+            logger.exception('%s init https connection fail@%d %s: %s', connection, flag, common.clazz_fullname(ex), ex)
             raise ProxyConnectInitError(flag, 'init https connection fail@%d' % flag)

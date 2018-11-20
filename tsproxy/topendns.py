@@ -345,7 +345,7 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
                     ipv4.append(a.to_text())
             if ipv4 is not None:
                 dns_cache[qname] = ipv4
-                logger.log(logging.INFO if used < 1 else logging.WARN, 'opendns lookup %s => %s used %.2f sec', qname, ipv4, used)
+                logger.log(logging.DEBUG if used < 1 else logging.INFO, 'opendns lookup %s => %s used %.2f sec', qname, ipv4, used)
                 return ipv4
         except (NoAnswer, NXDOMAIN, Timeout) as noa:
             ex = noa
@@ -354,14 +354,14 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
         ipv4 = socket.gethostbyname_ex(qname)[2]
         dns_cache[qname] = ipv4
         if ex is not None:
-            logger.info('local lookup result: %s => %s for (%s:%s)', qname, ipv4, ex.__class__.__name__, ex)
+            logger.info('local lookup result: %s => %s for (%s:%s)', qname, ipv4, common.clazz_fullname(ex), ex)
         else:
             used = time.time() - query_start
             logger.log(logging.DEBUG if used < 1 else logging.INFO, 'local lookup %s => %s used %.2f sec', qname, ipv4,
                        used)
         return ipv4
     except BaseException as ex:
-        logger.warning('%s => DNS lookup FAIL(%s:%s), raise_on_fail=%s', qname, ex.__class__.__name__, ex, raise_on_fail)
+        logger.info('%s => DNS lookup FAIL(%s:%s), raise_on_fail=%s', qname, common.clazz_fullname(ex), ex, raise_on_fail)
         if raise_on_fail:
             raise ex
     return None
@@ -486,7 +486,7 @@ if __name__ == '__main__':
         except FileNotFoundError:
             pass
         except BaseException as ex1:
-            logger.warning('term_handler error: %s(%s)', ex1.__class__.__name__, ex1)
+            logger.warning('term_handler error: %s(%s)', common.clazz_fullname(ex1), ex1)
         finally:
             sys.exit(0)
 

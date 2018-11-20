@@ -50,7 +50,7 @@ def get_wan_ip():
             else:
                 logger.warning('get_wan_ip() return not ipv4: %s', wan_ip)
     except Exception as ex:
-        logger.warning('get_wan_ip() %s: %s', ex.__class__.__name__, ex)
+        logger.warning('get_wan_ip() %s: %s', common.clazz_fullname(ex), ex)
     return None
 
 
@@ -293,7 +293,7 @@ class ProxyHolder(object):
             local_ip = res.headers.get('Proxy-LocalIP', None)
             return res.status_code, local_ip
         except BaseException as ex:
-            logger.info('_test_proxy(%s, %s) %s: %s', proxy_name, reason, ex.__class__.__name__, ex)
+            logger.info('_test_proxy(%s, %s) %s: %s', proxy_name, reason, common.clazz_fullname(ex), ex)
         finally:
             self.checking_proxy = None
             if res:
@@ -351,7 +351,7 @@ class ProxyHolder(object):
         else:
             return None, None
 
-    def _speed_test(self, proxy, speed_threshold=0, timeout=5, bytes_range=None):
+    def _speed_test(self, proxy, speed_threshold=0, bytes_range=None):
         res = None
         MAX_BUF_SIZE_KB = 200
         headers = {
@@ -372,18 +372,18 @@ class ProxyHolder(object):
 
         proxy_ip_speed = {}
         for proxy_ip in proxy_ips:
-            self.speeding_proxy = '%s/%s' % (proxy.short_hostname, proxy_ip)
-            logger.debug("going to _speed_test %s/%s ...", proxy.short_hostname, proxy_ip)
-            try:
-                for url in common.speed_urls:
+            for url in common.speed_urls:
+                self.speeding_proxy = '%s/%s' % (proxy.short_hostname, proxy_ip)
+                logger.debug("going to _speed_test %s/%s with %s ...", proxy.short_hostname, proxy_ip, url)
+                down_speed = time_past = 0
+                try:
                     start = time.time()
                     domain = urlparse(url).netloc
-                    res = requests.get(url, headers=headers, timeout=timeout, proxies={
+                    res = requests.get(url, headers=headers, timeout=2.5, proxies={
                         "http": "http://127.0.0.1:%d" % self._proxy_port,
                         "https": "http://127.0.0.1:%d" % self._proxy_port
                     }, stream=True)
                     res_len = 0
-                    down_speed = time_past = 0
                     if 200 <= res.status_code < 400:
                         con_len = res.headers.get('content-length', 0)
                         kn = 10
@@ -397,7 +397,7 @@ class ProxyHolder(object):
                             down_speed = res_len / time_past
                             logger.debug("_speed_test(%s/%s) recved %d/%s, time_past: %.1f sec, speed: %sB/S", proxy.short_hostname, proxy_ip, res_len, con_len, time_past,
                                          fmt_human_bytes(down_speed))
-                            if (kn > 10 and down_speed < min(kn, 100)*1024) or (100 < kn and time_past > timeout) or down_speed > 1024*1024:
+                            if (kn > 10 and down_speed < min(kn, 100)*1024) or (100 < kn and time_past > common.speed_test_timeout) or down_speed > 1024*1024:
                                 break
                             if kn < MAX_BUF_SIZE_KB:
                                 kn *= 2
@@ -422,23 +422,21 @@ class ProxyHolder(object):
                         down_speed = proxy.down_speed
                         proxy_ip_speed[proxy_ip] = proxy.down_speed
                         logger.error('_speed_test(%s/%s) status_code: %d SHOULD CHANGE URL: %s', proxy.short_hostname, proxy_ip, res.status_code, url)
-                        pass
                     else:
                         proxy_ip_speed[proxy_ip] = -res.status_code
                         logger.warning('_speed_test(%s/%s) fail url: %s status_code: %d', proxy.short_hostname, proxy_ip, url, res.status_code)
+                except BaseException as ex:
+                    proxy_ip_speed[proxy_ip] = -502
+                    logger.info('_speed_test(%s/%s) %s: %s', proxy.short_hostname, proxy_ip, common.clazz_fullname(ex), ex)
+                finally:
                     if domain in self.domain_speed_map:
                         self.domain_speed_map[domain][self.speeding_proxy] = down_speed
                     else:
                         self.domain_speed_map[domain] = {self.speeding_proxy: down_speed}
-                    res.close()
-                    res = None
-            except BaseException as ex:
-                proxy_ip_speed[proxy_ip] = -502
-                logger.info('_speed_test(%s/%s) %s: %s', proxy.short_hostname, proxy_ip, ex.__class__.__name__, ex)
-            finally:
-                self.speeding_proxy = None
-                if res:
-                    res.close()
+                    self.speeding_proxy = None
+                    if res:
+                        res.close()
+                        res = None
         for ip in sorted(proxy_ip_speed, key=lambda _ip: proxy_ip_speed[_ip], reverse=True):
             proxy.down_speed = proxy_ip_speed[ip]
             if len(proxy_ips) > 1:
@@ -494,6 +492,7 @@ class ProxyHolder(object):
 
         retried = 0
         move_head = False
+        code = 500
         try:
             _may_the_head = sorted(self.proxy_list, key=lambda p: p.total_count, reverse=True)[0]
             logger.info("test_proxies_speed START (_may_the_head=%s)", _may_the_head)
@@ -502,7 +501,9 @@ class ProxyHolder(object):
             head_proxy = self.head_proxy
             may_the_heads = [_may_the_head.hostname, head_proxy.hostname]
             while True:
-                code = yield from self._loop.run_in_executor(self.executor, async_test)
+                code1 = yield from self._loop.run_in_executor(self.executor, async_test)
+                if code >= 400:
+                    code = code1
                 if hosts is None:
                     self.last_speed_test_time = time.time()
                 self.proxy_list.sort(key=sort_proxies)
@@ -609,7 +610,7 @@ class ProxyHolder(object):
             except CancelledError:
                 break
             except BaseException as ex2:
-                logger.exception('%s: %s', ex2.__class__.__name__, ex2)
+                logger.exception('%s: %s', common.clazz_fullname(ex2), ex2)
 
             try:
                 if timeout:
@@ -720,7 +721,7 @@ class ProxyHolder(object):
         #             head_proxy = self.head_proxy
         for _proxy in self.proxy_list[1:]:
             if not _proxy.pause:
-                if (_proxy.tp90 >= global_tp90*3 and _proxy.tp90_len > 10) or (_proxy.proxy_count > 10 and _proxy.fail_rate >= common.fail_rate_threshold*3):
+                if (_proxy.tp90 >= global_tp90*3 and _proxy.tp90_len > 10) or (_proxy.proxy_count > 10 and _proxy.fail_rate >= common.auto_pause_fail_rate_threshold):
                     _proxy.pause = True
                     self.auto_pause_list.add(_proxy.hostname)
                     logger.info("%s auto pause", _proxy)

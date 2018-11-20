@@ -183,18 +183,18 @@ class ProxyConnector(Connector):
             except BaseException as ex1:
                 connect_ex = ex1
                 logger.debug("connect to proxy(%s:%d) for (%s, %s, %s) %s: %s",
-                             proxy.hostname, proxy.port, peer, target_host, target_port, ex1.__class__.__name__, ex1)
+                             proxy.hostname, proxy.port, peer, target_host, target_port, common.clazz_fullname(ex1), ex1)
                 # move the head to tail
                 used = time.time()-timeout+common.default_timeout
                 err_no = common.errno_from_exception(ex1)
                 if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH):
                     if proxy_name is not None \
-                            or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', ex1.__class__.__name__, ex1):
+                            or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', common.clazz_fullname(ex1), ex1):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
                         proxy.update_stat_info(used, proxy_fail=True, proxy_name=proxy_name)
                         if proxy_name is None:
-                            self.proxy_holder.check(proxy, '%s: %s' % (ex1.__class__.__name__, ex1))
+                            self.proxy_holder.check(proxy, '%s: %s' % (common.clazz_fullname(ex1), ex1))
                 else:
                     break
         used = time.time() - timeout + common.default_timeout
