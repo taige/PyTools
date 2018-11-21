@@ -344,12 +344,13 @@ class ProxyHolder(object):
                 _name, ip = name_ip.split('/')
                 _p, _ = self.find_proxy(_name)
                 if _p is not None:
-                    if _p.pause:
+                    if _p.pause or _p.error_time < common.retry_interval_on_error * _p.error_count:
+                        logger.debug("try_speedup_proxy(): NOT use %s as speedup proxy cause pause<%s> or error_time=%.1f < %.1fx%d",
+                                     _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count)
                         continue
                     logger.info('try speedup proxy %s/%s/%s for %s', _name, ip, _speed, target_host)
                 return _p, ip
-        else:
-            return None, None
+        return None, None
 
     def _speed_test(self, proxy, speed_threshold=0, bytes_range=None):
         res = None
@@ -540,7 +541,9 @@ class ProxyHolder(object):
                     _name, ip = name_ip.split('/')
                     _p, _ = self.find_proxy(_name)
                     if _p is not None:
-                        if _p.pause:
+                        if _p.pause or _p.error_time < common.retry_interval_on_error * _p.error_count:
+                            logger.debug("print_domain_speed(): NOT use %s as speedup proxy cause pause<%s> or error_time=%.1f < %.1fx%d",
+                                         _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count)
                             continue
                     try:
                         logger.info(fmt.strip() % (domain, _name, ip, _max_speed,

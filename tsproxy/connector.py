@@ -95,7 +95,7 @@ class ProxyConnector(Connector):
         self.proxy_holder = proxy_holder
 
     @asyncio.coroutine
-    def _connect_proxy(self, proxy, peer, target_host, target_port, connect_timeout, loop=None, speed_test_ip=None, **kwargs):
+    def _connect_proxy(self, proxy, peer, target_host, target_port, connect_timeout, loop=None, speed_test_ip=None, speedup_ip=None, **kwargs):
 
         @asyncio.coroutine
         def _init_core(_conn):
@@ -109,6 +109,9 @@ class ProxyConnector(Connector):
         if speed_test_ip is not None:
             logger.debug('speed_testing %s/%s ...', proxy_host, speed_test_ip)
             proxy_ips = [speed_test_ip]
+        elif speedup_ip is not None:
+            logger.debug('speedup_ip %s/%s ...', proxy_host, speedup_ip)
+            proxy_ips = [speedup_ip]
         else:
             try:
                 proxy_ips = yield from topendns.async_dns_query(proxy_host, raise_on_fail=True, ex_func=True, loop=loop)
@@ -155,6 +158,7 @@ class ProxyConnector(Connector):
             raise Exception('NO FOUND PROXY CONFIG')
         connect_ex = None
         for i in range(0, proxy_count):
+            proxy = speedup_ip = None
             left_time = timeout - time.time()
             if proxy_name is not None:
                 if i > 0:
@@ -163,9 +167,8 @@ class ProxyConnector(Connector):
                 if proxy is None:
                     raise Exception('NOT FOUND PROXY: %s' % proxy_name)
             else:
-                proxy = None
                 if i == 0 and speed_test_ip is None:
-                    proxy, speed_test_ip = self.proxy_holder.try_speedup_proxy(target_host)
+                    proxy, speedup_ip = self.proxy_holder.try_speedup_proxy(target_host)
                 if proxy is None:
                     proxy = self.proxy_holder.head_proxy
                 if (proxy_count - i) > 1:
@@ -176,7 +179,7 @@ class ProxyConnector(Connector):
             elif left_time < 1:
                 left_time = 1
             try:
-                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop=loop, speed_test_ip=speed_test_ip, **kwargs)
+                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop=loop, speed_test_ip=speed_test_ip, speedup_ip=speedup_ip, **kwargs)
                 proxy_conn.set_attr('Proxy-Name', proxy_name)
                 proxy.error_count = 0
                 return proxy_conn
@@ -188,7 +191,7 @@ class ProxyConnector(Connector):
                 used = time.time()-timeout+common.default_timeout
                 err_no = common.errno_from_exception(ex1)
                 if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH):
-                    if proxy_name is not None \
+                    if proxy_name is not None or speedup_ip is not None \
                             or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', common.clazz_fullname(ex1), ex1):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
