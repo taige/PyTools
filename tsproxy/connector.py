@@ -234,7 +234,7 @@ class SmartConnector(Connector):
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
         # TODO about available logic
-        if self.smart_mode <= 0 or not self.proxy_holder.available:
+        if self.smart_mode <= 0 or (proxy_name is None and not self.proxy_holder.available):
             connector = self.direct_connector
         elif self.smart_mode >= 2 or proxy_name is not None:
             connector = self.proxy_connector

@@ -838,8 +838,9 @@ class ProxyHolder(object):
             proxy.head_time = time.time()
             self.available = True
             return True
-        self.available = False
         if force_to_head:
+            if not only_select:
+                self.available = False
             logger.warning("try_select_HEAD_proxy(): sorry, we CAN NOT select head proxy [%d:%d] %s",
                            select_from, select_end, "by force" if force_to_head else '')
         return None if only_select else False
