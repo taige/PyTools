@@ -120,7 +120,7 @@ class ProxyConnector(Connector):
                 # DNS解析失败，则用之前解析的IP地址进行一次尝试
                 if proxy.resolved_addr:
                     proxy_ips, _ = proxy.resolved_addr
-                    logger.debug('%s, use resolved address(%s/%s) ...', ex, proxy_host, proxy_ips)
+                    logger.warning('%s, use resolved address(%s/%s) ...', ex, proxy_host, proxy_ips)
                 else:
                     raise
         dns_used = time.time() - start_time
@@ -141,10 +141,10 @@ class ProxyConnector(Connector):
             except (ConnectionError, OSError) as ex:
                 left_time = timeout - time.time()
                 # DNS解析失败，则用之前解析的IP地址进行一次尝试
-                if len(proxy_ips) > 1 and left_time > 0:
+                if i + 1 < len(proxy_ips) > 1 and left_time > 0:
                     _ip = proxy_ips.pop(0)
                     proxy_ips.append(_ip)
-                    logger.info('%s, try next ip(%s/%s) try again...', ex, proxy_host, proxy_ips[0])
+                    logger.info('connect to %s/%s failed: %s, try next ip(%s/%s) try again...', proxy_host, proxy_ip, ex, proxy_host, proxy_ips[0])
                     continue
                 else:
                     raise
@@ -233,8 +233,8 @@ class SmartConnector(Connector):
             self.proxy_connector = ProxyConnector(self.proxy_holder, loop)
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
-        connector = None
-        if self.smart_mode <= 0:
+        # TODO about available logic
+        if self.smart_mode <= 0 or not self.proxy_holder.available:
             connector = self.direct_connector
         elif self.smart_mode >= 2 or proxy_name is not None:
             connector = self.proxy_connector

@@ -123,7 +123,7 @@ if 'WINDIR' in os.environ:
 
 # rlock = threading.RLock()
 
-dns_executor = MyThreadPoolExecutor(max_workers=os.cpu_count()+1, pool_name='DnsWorker', order_by_func=True)
+dns_executor = MyThreadPoolExecutor(max_workers=os.cpu_count(), pool_name='DnsWorker', order_by_func=True)
 
 
 async def update_apnic_latest(raise_on_fail=False, loop=None):

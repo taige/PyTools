@@ -579,9 +579,9 @@ class Proxy(ProxyStat):
                       '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
                       'tp90=%.1fs/%d' % (self.tp90, self.tp90_len),
                       count_fmt1 % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
-                      ('f%.0f.%%' if fr1 >= 10 else 'f%.1f%%') % fr1,
+                      ('f%.0f.%%' if fr1 > 9.95 else 'f%.1f%%') % fr1,
                       count_fmt2 % format(self.proxy_count, ','),
-                      ('f%.0f.%%' if fr2 >= 10 else 'f%.1f%%') % fr2
+                      ('f%.0f.%%' if fr2 > 9.95 else 'f%.1f%%') % fr2
                       )
             if 'down_speed_settime' in self and (time.time() - self['down_speed_settime']) < 24*3600:
                 output += ' S=%s' % str_datetime(timestamp=self['down_speed_settime'], fmt='%H:%M:%S,%f', end=12)

@@ -79,6 +79,17 @@ class ProxyHolder(object):
         self.auto_pause_list = set()
         self.speed_urls_idx = 0
         self.domain_speed_map = {}
+        self._available = True
+
+    @property
+    def available(self):
+        return self._available
+
+    @available.setter
+    def available(self, ava):
+        if self._available != ava:
+            logger.warning('TSProxy status: %s', 'available' if ava else 'unavailable')
+            self._available = ava
 
     @property
     def proxy_names(self):
@@ -87,7 +98,7 @@ class ProxyHolder(object):
     @property
     def executor(self):
         if self._executor is None:
-            max_workers = min(os.cpu_count()+1, self._proxy_count)
+            max_workers = max(2, min(int((os.cpu_count()+1)/2), self._proxy_count))
             self._executor = common.MyThreadPoolExecutor(max_workers=max_workers, pool_name='proxy-helper')
         return self._executor
 
@@ -734,7 +745,8 @@ class ProxyHolder(object):
                     self.auto_pause_list.remove(_proxy.hostname)
                     logger.info("%s auto resume", _proxy)
 
-        if head_proxy.tp90_len >= common.tp90_calc_count:
+        # TODO about available logic
+        if head_proxy.tp90_len >= common.tp90_calc_count or not self.available:
             return True
         # for i in range(0, self._proxy_count):
         #     proxy = self.proxy_list[i]
@@ -824,7 +836,9 @@ class ProxyHolder(object):
             else:
                 logger.info("try_select_HEAD_proxy(): select %s, but it is the HEAD", proxy)
             proxy.head_time = time.time()
+            self.available = True
             return True
+        self.available = False
         if force_to_head:
             logger.warning("try_select_HEAD_proxy(): sorry, we CAN NOT select head proxy [%d:%d] %s",
                            select_from, select_end, "by force" if force_to_head else '')

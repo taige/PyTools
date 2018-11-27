@@ -164,7 +164,7 @@ def load_tsproxy_conf(conf_file):
 def clazz_fullname(obj):
     _module = obj.__class__.__module__
     _name = obj.__class__.__name__
-    if _module == 'builtin':
+    if _module == 'builtins':
         return _name
     return '%s.%s' % (_module, _name)
 
