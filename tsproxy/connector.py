@@ -433,7 +433,7 @@ class RouterableConnector(SmartConnector):
             _m = request.url.full_url.lower().startswith(v.lower())
         elif k == 'protocol':
             if v.upper() == 'HTTPS':
-                _m = request.method == 'CONNECT'
+                _m = request.method == common.HTTPS_METHOD_CONNECT
             elif v.upper() == 'HTTP':
                 _m = request.url.scheme.lower() == v.lower()
         elif k == 'host':

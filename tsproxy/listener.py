@@ -12,8 +12,6 @@ from tsproxy import httphelper2 as httphelper
 from tsproxy import common, proxy, streams, topendns, str_datetime, __version__
 
 
-HTTPS_CONNECT = 'CONNECT'
-
 HTTP_REQUEST = 'listener.HTTP_REQUEST'
 
 HTTP_RESPONSE = 'listener.HTTP_RESPONSE'
@@ -181,7 +179,7 @@ class HttpListener(Listener):
 
         connection.set_attr(proxy.PEER_CONNECTION, peer_conn)
 
-        if head_request.method == HTTPS_CONNECT:
+        if head_request.method == common.HTTPS_METHOD_CONNECT:
             logger.info("https-proxy(%s) HANDLING '%s'", connection, head_request.request_line)
             yield from self.do_https_forward(head_request, connection, peer_conn)
             logger.info("https-proxy(%s) DONE", connection)
@@ -222,6 +220,7 @@ class HttpListener(Listener):
         return isinstance(data, httphelper.RequestMessage)
 
     def do_http_forward(self, request, connection, peer_conn):
+        peer_conn[common.KEY_FIRST_HTTP_REQUEST] = request
         data = self.rewrite_request(request)
         peer_conn.writer.write(data)
         yield from peer_conn.writer.drain()
@@ -311,7 +310,7 @@ class ManageableHttpListener(HttpListener):
                     logger.info("do_command(%s) error: %s(%s)", request.url.path, common.clazz_fullname(pe), pe)
                     out.write('%s\n\n' % pe)
                     self.print_help(out)
-                out.write('\nS=%s\nTSProxy v%s %s\n' % (str_datetime(self.proxy_holder.last_speed_test_time), __version__, str_datetime()))
+                out.write('\nS=%s\n%s TSProxy v%s %s\n' % (str_datetime(self.proxy_holder.last_speed_test_time), '>' if self.proxy_holder.available else '=', __version__, str_datetime()))
                 res_cont = out.getvalue()
                 # code = 200
             if 'Mozilla' in ua or 'Chrome' in ua or 'Safari' in ua:
@@ -543,7 +542,7 @@ class HttpRequestDecoder(streams.Decoder):
             if not request:
                 return None
             if HTTP_REQUEST in connection and connection.get_attr(HTTP_REQUEST) != LOGGED \
-                    and (connection.get_attr(HTTP_REQUEST).method == HTTPS_CONNECT or HTTP_RESPONSE not in connection):
+                    and (connection.get_attr(HTTP_REQUEST).method == common.HTTPS_METHOD_CONNECT or HTTP_RESPONSE not in connection):
                 # https或者http还未没有响应的话，直接二进制转发；
                 # http已经有过响应的话，是一个新的request，需要解析
                 return request
@@ -574,7 +573,7 @@ class HttpResponseEncoder(streams.Encoder):
     def __call__(self, data, connection):
         if HTTP_REQUEST in connection:
             head_request = connection.get_attr(HTTP_REQUEST)
-            if head_request.method == HTTPS_CONNECT:
+            if head_request.method == common.HTTPS_METHOD_CONNECT:
                 if HTTP_RESPONSE not in connection and not isinstance(data, httphelper.ResponseMessage):
                     # 收到https的响应了，标记proxy成功
                     connection.set_attr(HTTP_RESPONSE, httphelper.https_proxy_response(head_request.version))

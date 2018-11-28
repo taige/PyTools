@@ -19,6 +19,9 @@ from tsproxy import lookup_conf_file, str_datetime, ts_print, __version__
 
 logger = logging.getLogger(__name__)
 
+KEY_FIRST_HTTP_REQUEST = 'FIRST_HTTP_REQUEST'
+HTTPS_METHOD_CONNECT = 'CONNECT'
+
 Timeout = timeout
 
 apnic_latest_url = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'

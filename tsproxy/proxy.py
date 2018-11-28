@@ -970,9 +970,8 @@ class ShadowsocksDecoder(streams.Decoder):
 class HttpRequestRewriter:
 
     def __call__(self, data, connection):
-        if 'FIRST_REQUEST' in connection:
-            enc = connection['FIRST_REQUEST']
-            del connection['FIRST_REQUEST']
+        if common.KEY_FIRST_HTTP_REQUEST in connection:
+            enc = rewrite_http_request(connection.pop(common.KEY_FIRST_HTTP_REQUEST))
             return enc
         return data
 
@@ -987,36 +986,25 @@ class HttpProxy(Proxy):
     def protocol(self):
         return 'http'
 
-    def rewrite_request(self, request):
-        buf = BytesIO()
-        if request.method == 'CONNECT':
-            buf.write(('CONNECT %s:%d HTTP/1.1\r\n' % (request.url.hostname, request.url.port)).encode())
-        else:
-            buf.write(request.request_line.encode() + b'\r\n')
-        for key in request.headers:
-            if key == 'Proxy-Name':
-                continue
-            buf.write(key.encode() + b': ' + request.headers[key].encode() + b'\r\n')
-        buf.write(b'\r\n')
-        buf.write(request.body)
-        return buf.getvalue()
-
     def init_connection(self, connection, host, port, request=None, **kwargs):
         if not request:
             return
         flag = 0
         try:
-            hello_req = self.rewrite_request(request)
-            if request.method != 'CONNECT':
-                connection['FIRST_REQUEST'] = hello_req
+            if request.method != common.HTTPS_METHOD_CONNECT:
+                # http request, save the request and do encode at write() phase
+                connection[common.KEY_FIRST_HTTP_REQUEST] = request
                 return
+            else:
+                # https request, connect to downstream proxy
+                hello_req = rewrite_http_request(request)
             connection.writer.write(hello_req)
             # yield from connection.writer.drain()
             flag = 1
             hello_res = yield from connection.reader.readuntil(b'\r\n\r\n')
             flag = 2
             _http_parser = httphelper.HttpResponseParser()
-            response, _ = _http_parser.parse_response(hello_res, 'CONNECT')
+            response, _ = _http_parser.parse_response(hello_res, common.HTTPS_METHOD_CONNECT)
             flag = 3
             if response.code != 200:
                 raise ProxyConnectInitError(flag, 'https proxy res.code=%d/%s' % (response.code, response.reason))
@@ -1027,3 +1015,18 @@ class HttpProxy(Proxy):
         except Exception as ex:
             logger.exception('%s init https connection fail@%d %s: %s', connection, flag, common.clazz_fullname(ex), ex)
             raise ProxyConnectInitError(flag, 'init https connection fail@%d' % flag)
+
+
+def rewrite_http_request(request):
+    buf = BytesIO()
+    if request.method == common.HTTPS_METHOD_CONNECT:
+        buf.write(('CONNECT %s:%d HTTP/1.1\r\n' % (request.url.hostname, request.url.port)).encode())
+    else:
+        buf.write(request.request_line.encode() + b'\r\n')
+    for key in request.headers:
+        if key == 'Proxy-Name':
+            continue
+        buf.write(key.encode() + b': ' + request.headers[key].encode() + b'\r\n')
+    buf.write(b'\r\n')
+    buf.write(request.body)
+    return buf.getvalue()
