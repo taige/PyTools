@@ -49,6 +49,8 @@ class ProxyStat(dict):
         self._resp_cache_time = 0
         self._pc_cache = []
         self._pc_cache_time = 0
+        self._proxy_fail_stat = common.FIFOCache(cache_timeout=300)
+        self._proxy_timeout_stat = common.FIFOCache(cache_timeout=300)
 
     def _name(self):
         raise NotImplementedError()
@@ -444,8 +446,22 @@ class ProxyStat(dict):
         self.save_last_tp90()
         self.sess_count = 0
 
-    def update_stat_info(self, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
+    def update_proxy_stat(self, conn, first_response_time=None, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False):
+        if first_response_time is None:
+            first_response_time = time.time()
+        resp_time = first_response_time - conn.create_time
+        logger.debug('proxy %s %s use %.2f sec', conn, loginfo, resp_time)
+        self._update_stat_info(conn.target_host, resp_time, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout)
+
+    def get_proxy_stat(self, target_host, proxy_fail=False, proxy_timeout=False, resp_time=False):
+        """ 如果代理响应超时或无响应，返回True """
+        # TODO 先简单实现
+        return self._proxy_fail_stat.get(target_host, proxy_fail) or self._proxy_timeout_stat.get(target_host, proxy_timeout)
+
+    def _update_stat_info(self, target_host, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
         # with self.rlock:
+        self._proxy_fail_stat[target_host] = proxy_fail
+        self._proxy_timeout_stat[target_host] = proxy_timeout
         if proxy_fail or proxy_timeout:
             # self.fail_count += 1
             self.total_fail += 1
@@ -663,13 +679,6 @@ class Proxy(ProxyStat):
     def forward_flag(self):
         return 5
 
-    def update_proxy_stat(self, conn, first_response_time=None, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False):
-        if first_response_time is None:
-            first_response_time = time.time()
-        resp_time = first_response_time - conn.create_time
-        logger.debug('proxy %s %s use %.2f sec', conn, loginfo, resp_time)
-        self.update_stat_info(resp_time, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout)
-
     def on_idle(self, connection, peer_conn, is_responsed):
         return 'Proxy-Name' in connection or self.proxy_monitor is None or self.proxy_monitor.head_proxy.hostname == self.hostname
 
@@ -731,7 +740,7 @@ class DirectForward(Proxy):
     def __init__(self):
         super().__init__(None, 'D')
 
-    def update_stat_info(self, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
+    def _update_stat_info(self, target_host, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
         pass
 
     @property

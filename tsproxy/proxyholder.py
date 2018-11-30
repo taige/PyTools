@@ -248,7 +248,7 @@ class ProxyHolder(object):
             self.add_shadowsocks_proxy(h)
 
     def add_shadowsocks_proxy(self, host, insert=False):
-        ''' hostname: passord/method@us1.sss.tf:443 or us1.sss.tf '''
+        """ hostname: passord/method@us1.sss.tf:443 or us1.sss.tf """
         h = host
         p1 = h.find('/')
         p2 = h.find('@')
@@ -355,9 +355,14 @@ class ProxyHolder(object):
                 _name, ip = name_ip.split('/')
                 _p, _ = self.find_proxy(_name)
                 if _p is not None:
-                    if _p.pause or _p.error_time < common.retry_interval_on_error * _p.error_count:
-                        logger.debug("try_speedup_proxy(): NOT use %s as speedup proxy cause pause<%s> or error_time=%.1f < %.1fx%d",
-                                     _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count)
+                    if _p.pause \
+                            or _p.error_time < common.retry_interval_on_error * _p.error_count \
+                            or _p.get_proxy_stat(target_host):
+                        logger.debug("try_speedup_proxy(): NOT use %s as speedup proxy cause pause<%s> "
+                                     "or error_time=%.1f < %.1fx%d "
+                                     "or proxy_fail_or_timeout(%s)",
+                                     _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count,
+                                     _p.get_proxy_stat(target_host))
                         continue
                     logger.info('try speedup proxy %s/%s/%s for %s', _name, ip, _speed, target_host)
                 return _p, ip
@@ -552,9 +557,14 @@ class ProxyHolder(object):
                     _name, ip = name_ip.split('/')
                     _p, _ = self.find_proxy(_name)
                     if _p is not None:
-                        if _p.pause or _p.error_time < common.retry_interval_on_error * _p.error_count:
-                            logger.debug("print_domain_speed(): NOT use %s as speedup proxy cause pause<%s> or error_time=%.1f < %.1fx%d",
-                                         _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count)
+                        if _p.pause \
+                                or _p.error_time < common.retry_interval_on_error * _p.error_count \
+                                or _p.get_proxy_stat(domain):
+                            logger.debug("print_domain_speed(): NOT use %s as speedup proxy cause pause<%s> "
+                                         "or error_time=%.1f < %.1fx%d "
+                                         "or proxy_fail_or_timeout(%s)",
+                                         _p, _p.pause, _p.error_time, common.retry_interval_on_error, _p.error_count,
+                                         _p.get_proxy_stat(domain))
                             continue
                     try:
                         logger.info(fmt.strip() % (domain, _name, ip, _max_speed,

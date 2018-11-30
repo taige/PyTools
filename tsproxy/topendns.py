@@ -368,11 +368,11 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
 
 
 def is_subnet(ipv4, netlist):
-    '''
+    """
     :param ipv4:
     :param netlist: (('10.0.0.0', 0xffffff00), (...), ...)
     :return:
-    '''
+    """
     ipn = int.from_bytes(socket.inet_pton(socket.AF_INET, ipv4), byteorder='big')
     for ip, mask in netlist:
         if ip == (ipn & mask):

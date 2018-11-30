@@ -219,11 +219,11 @@ class ProxyConnector(Connector):
 class SmartConnector(Connector):
 
     def __init__(self, proxy_holder=None, smart_mode=1, loop=None):
-        ''' smart_mode:
+        """ smart_mode:
               0: direct connect
               1: smart(director connect if china ip else use proxy)
               2: proxy always
-        '''
+        """
         super().__init__(loop)
         self.proxy_holder = proxy_holder
         self.smart_mode = smart_mode if proxy_holder else 0
@@ -259,7 +259,7 @@ class SmartConnector(Connector):
 
 
 class RouterableConnector(SmartConnector):
-    '''
+    """
     router_conf: router.yaml
         default: jp.f
         match_con1:
@@ -280,7 +280,7 @@ class RouterableConnector(SmartConnector):
         router:
             - match_con1: jp.a
             - match_con2: jp.a
-    '''
+    """
 
     def __init__(self, proxy_holder=None, smart_mode=1, loop=None, router_conf='router.yaml', **kwargs):
         super().__init__(proxy_holder, smart_mode, loop)

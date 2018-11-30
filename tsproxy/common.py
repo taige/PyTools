@@ -563,8 +563,8 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
     # idle_start = time.time()
     first_response_time = None
     while True:
+        data = None
         try:
-            data = None
             data = yield from connection.reader.read(read_timeout=1)
             if data and not peer_conn.is_closing and (stop_func is None or not stop_func(data)):
                 if on_data_recv:

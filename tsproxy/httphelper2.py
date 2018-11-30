@@ -189,8 +189,7 @@ class HttpRequestParser(HttpParser):
 
     @staticmethod
     def parse_path(path, method):
-        '''    ['full_url', 'full_path', 'scheme', 'netloc', 'hostname', 'port', 'path', 'query'])
-        '''
+        """ ['full_url', 'full_path', 'scheme', 'netloc', 'hostname', 'port', 'path', 'query'])  """
         url = urlparse(path)
         result = {'scheme': url.scheme if url.scheme else 'http' if url.netloc else '',
                   'netloc': url.netloc,
