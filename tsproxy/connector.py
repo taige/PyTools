@@ -195,7 +195,7 @@ class ProxyConnector(Connector):
                             or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', common.clazz_fullname(ex1), ex1):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
-                        proxy.update_stat_info(used, proxy_fail=True, proxy_name=proxy_name)
+                        proxy.update_proxy_stat(target_host, used, loginfo='connect failed(%s)' % ex1, proxy_fail=True, proxy_name=proxy_name)
                         if proxy_name is None:
                             self.proxy_holder.check(proxy, '%s: %s' % (common.clazz_fullname(ex1), ex1))
                 else:

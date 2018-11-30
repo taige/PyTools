@@ -22,9 +22,7 @@ PROXY_NAME = 'proxy.PROXY_NAME'
 
 
 class ProxyStat(dict):
-    # global_proxy_count = None
-    # global_fail_count = 0
-    global_resp_time = None  # common.FIFOList(cache_timeout=common.tp90_expired_time, cache_count=common.tp90_calc_count*20, item_key=lambda k: k[0])
+    global_resp_time = None
     global_tp90_len = 0
     global_resp_count = 0
     global_tp90_cache = 0
@@ -279,10 +277,6 @@ class ProxyStat(dict):
             self._resp_cache_time = time.time()
         return self._resp_time
 
-    # @resp_time.setter
-    # def resp_time(self, c):
-    #     self['resp_time'] = c
-
     @property
     def last_tp90(self):
         if 'last_tp90' not in self:
@@ -304,30 +298,6 @@ class ProxyStat(dict):
         ProxyStat.global_tp90_inc_time = time.time()
         return '%s%.1f' % ('+' if ProxyStat.global_tp90_inc >= 0 else '', ProxyStat.global_tp90_inc)
 
-    # @staticmethod
-    # def calc_tp90_1(time_count_dict=None, time_count=None):
-    #     is_global = False
-    #     if time_count_dict is None:
-    #         if (time.time() - ProxyStat.global_tp90_cache_time) < 0.5 and ProxyStat.global_tp90_cache > 0:
-    #             return ProxyStat.global_tp90_cache
-    #         is_global = True
-    #         time_count_dict = ProxyStat.global_resp_time
-    #         c90 = int((ProxyStat.global_proxy_count - ProxyStat.global_fail_count) * 0.9)
-    #     else:
-    #         c90 = int(time_count * 0.9)
-    #     count = 0
-    #     tp90 = 0.0
-    #     for t in sorted(time_count_dict, key=lambda k: float(k)):
-    #         count += time_count_dict[t]
-    #         if count >= c90:
-    #             tp90 = float(t)
-    #             # logger.debug("count = %d, c90 = %d, tp90 = %.1f", count, c90, tp90)
-    #             break
-    #     if is_global:
-    #         ProxyStat.global_tp90_cache = tp90
-    #         ProxyStat.global_tp90_cache_time = time.time()
-    #     return tp90
-
     @staticmethod
     def calc_tp90(time_list=None, time_count=None):
         is_global = False
@@ -335,7 +305,7 @@ class ProxyStat(dict):
             if (time.time() - ProxyStat.global_tp90_cache_time) < 0.5 and ProxyStat.global_tp90_cache > 0:
                 return ProxyStat.global_tp90_cache
             is_global = True
-            time_list = []  # ProxyStat.global_resp_time
+            time_list = []
             for t in ProxyStat.global_resp_time:
                 if not hasattr(t, '__call__'):
                     continue
@@ -446,12 +416,9 @@ class ProxyStat(dict):
         self.save_last_tp90()
         self.sess_count = 0
 
-    def update_proxy_stat(self, conn, first_response_time=None, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False):
-        if first_response_time is None:
-            first_response_time = time.time()
-        resp_time = first_response_time - conn.create_time
-        logger.debug('proxy %s %s use %.2f sec', conn, loginfo, resp_time)
-        self._update_stat_info(conn.target_host, resp_time, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout)
+    def update_proxy_stat(self, target_host, resp_time, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False, proxy_name=None):
+        logger.debug('proxy for %s %s use %.2f sec', target_host, loginfo, resp_time)
+        self._update_stat_info(target_host, resp_time, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout, proxy_name=proxy_name)
 
     def get_proxy_stat(self, target_host, proxy_fail=False, proxy_timeout=False, resp_time=False):
         """ 如果代理响应超时或无响应，返回True """
@@ -463,22 +430,11 @@ class ProxyStat(dict):
         self._proxy_fail_stat[target_host] = proxy_fail
         self._proxy_timeout_stat[target_host] = proxy_timeout
         if proxy_fail or proxy_timeout:
-            # self.fail_count += 1
             self.total_fail += 1
-            # ProxyStat.global_fail_count += 1
-        # self.proxy_count += 1
-        # self.proxy_counter(proxy_fail or proxy_timeout)
         self.total_count += 1
-        # ProxyStat.global_proxy_count += 1
-        # ProxyStat.global_proxy_count.append([proxy_fail or proxy_timeout, self._name()])
 
         if not proxy_fail:
             t = resp_time
-            # t = float('%.1f' % resp_time)
-
-            # self['resp_time'].append(t)
-
-            # ProxyStat.global_resp_time.append([t, self._name()])
         else:
             t = -1
         ProxyStat.global_resp_time.append([t, proxy_fail or proxy_timeout, self._name()])
@@ -713,11 +669,11 @@ class Proxy(ProxyStat):
             _log_speed = None
         _, first_res_time = yield from common.forward_forever(connection, peer_conn, on_data_recv=_log_speed, on_idle=self.on_idle)
         if connection.response_timeout:
-            self.update_proxy_stat(connection, loginfo="response timeout", proxy_timeout=True)
+            self.update_proxy_stat(connection.target_host, time.time() - connection.create_time, loginfo="response timeout", proxy_timeout=True)
         elif not first_res_time:
-            self.update_proxy_stat(connection, loginfo="be closed with no response", proxy_fail=True)
+            self.update_proxy_stat(connection.target_host, time.time() - connection.create_time, loginfo="be closed with no response", proxy_fail=True)
         else:
-            self.update_proxy_stat(connection, first_response_time=first_res_time)
+            self.update_proxy_stat(connection.target_host, first_res_time - connection.create_time)
             if _log_speed is not None:
                 connection['_realtime_speed_'] = _mutable_data_count[0] / (_mutable_data_count[2] + _mutable_data_count[3])
                 if int(time.time()) != _mutable_data_count[4]:
