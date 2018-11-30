@@ -405,7 +405,7 @@ class RouterableConnector(SmartConnector):
                     if (time.time() - self.yaml_conf[pause_key]) <= 5*60:
                         continue
                     else:
-                        logger.info('delete pause router: %s', _con_name)
+                        logger.info('resume pause router: %s', _con_name)
                         del self.yaml_conf[pause_key]
                 _con = self.yaml_conf[_con_name]
                 _con_match = True
