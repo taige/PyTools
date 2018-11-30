@@ -19,7 +19,7 @@ class Connector(object):
     def __init__(self, loop=None):
         self._loop = loop if loop else asyncio.get_event_loop()
 
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         raise NotImplementedError()
 
     @staticmethod
@@ -36,7 +36,7 @@ class Connector(object):
 
     @asyncio.coroutine
     def _connect(self, handler, peer, ip, port, host=None, loop=None,
-                 encoder=None, decoder=None, init_coro=None, connect_timeout=common.default_timeout, **kwargs):
+                 encoder=None, decoder=None, init_coro=None, connect_timeout=common.default_timeout, **kwargs) -> streams.StreamConnection:
 
         init_done = asyncio.Event()
         init_ex = None
@@ -75,7 +75,7 @@ class DirectConnector(Connector):
         self._proxy = tsproxy.proxy.DirectForward()
 
     @asyncio.coroutine
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         dns_start_time = time.time()
         target_ip = yield from topendns.async_dns_query(target_host, raise_on_fail=True, local_dns=True, loop=loop)
         dns_used = time.time() - dns_start_time
@@ -128,8 +128,10 @@ class ProxyConnector(Connector):
         if left_time <= 0:
             raise asyncio.TimeoutError('ProxyConnector._connect_proxy() timeout, async_dns_query used %.3f seconds' % dns_used)
 
+        left_time = left_time / len(proxy_ips)
         for i in range(0, len(proxy_ips)):
             proxy_ip = proxy_ips[0]
+            _start = time.time()
             logger.debug('connecting to proxy(%s/%s:%d) for (%s->%s:%d)', proxy_host, proxy_ip, proxy_port, peer, target_host, target_port)
             try:
                 proxy_conn = yield from super()._connect(proxy, peer, proxy_ip, proxy_port, host=proxy_host, loop=loop,
@@ -138,19 +140,22 @@ class ProxyConnector(Connector):
                                                          init_coro=_init_core, connect_timeout=left_time, **kwargs)
                 self._set_proxy_info(proxy_conn, target_host, target_port, peer, proxy)
                 return proxy_conn
-            except (ConnectionError, OSError) as ex:
-                left_time = timeout - time.time()
-                # DNS解析失败，则用之前解析的IP地址进行一次尝试
-                if i + 1 < len(proxy_ips) > 1 and left_time > 0:
+            except BaseException as ex:
+                err_no = common.errno_from_exception(ex)
+                if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH) \
+                        and i + 1 < len(proxy_ips) > 1 and left_time > 0:
+                    proxy.update_proxy_stat(None, time.time() - _start, target_host=target_host, proxy_ip=proxy_ip,
+                                            loginfo='_connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex, asyncio.TimeoutError) else ex), proxy_fail=True, **kwargs)
                     _ip = proxy_ips.pop(0)
                     proxy_ips.append(_ip)
                     logger.info('connect to %s/%s failed: %s, try next ip(%s/%s) try again...', proxy_host, proxy_ip, ex, proxy_host, proxy_ips[0])
                     continue
                 else:
-                    raise
+                    ex.__dict__['__proxy_ip__'] = proxy_ip
+                    raise ex
 
     @asyncio.coroutine
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         speed_test_ip = kwargs.pop('speed_test_ip', None)
         timeout = time.time() + kwargs.pop('connect_timeout', common.default_timeout)
         proxy_count = self.proxy_holder.psize
@@ -158,7 +163,8 @@ class ProxyConnector(Connector):
             raise Exception('NO FOUND PROXY CONFIG')
         connect_ex = None
         for i in range(0, proxy_count):
-            proxy = speedup_ip = None
+            proxy = None  # type: tsproxy.proxy.Proxy
+            speedup_ip = None
             left_time = timeout - time.time()
             if proxy_name is not None:
                 if i > 0:
@@ -179,7 +185,7 @@ class ProxyConnector(Connector):
             elif left_time < 1:
                 left_time = 1
             try:
-                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop=loop, speed_test_ip=speed_test_ip, speedup_ip=speedup_ip, **kwargs)
+                proxy_conn = yield from self._connect_proxy(proxy, peer, target_host, target_port, left_time, loop=loop, speed_test_ip=speed_test_ip, speedup_ip=speedup_ip, proxy_name=proxy_name, **kwargs)
                 proxy_conn.set_attr('Proxy-Name', proxy_name)
                 proxy.error_count = 0
                 return proxy_conn
@@ -195,7 +201,8 @@ class ProxyConnector(Connector):
                             or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', common.clazz_fullname(ex1), ex1):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
-                        proxy.update_proxy_stat(target_host, used, loginfo='connect failed(%s)' % ex1, proxy_fail=True, proxy_name=proxy_name)
+                        proxy_ip = ex1.__dict__.pop('__proxy_ip__', None)
+                        proxy.update_proxy_stat(None, used, target_host=target_host, proxy_ip=proxy_ip, loginfo='connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex1, asyncio.TimeoutError) else ex1), proxy_fail=True, proxy_name=proxy_name)
                         if proxy_name is None:
                             self.proxy_holder.check(proxy, '%s: %s' % (common.clazz_fullname(ex1), ex1))
                 else:
@@ -232,7 +239,7 @@ class SmartConnector(Connector):
         if self.smart_mode >= 1:
             self.proxy_connector = ProxyConnector(self.proxy_holder, loop)
 
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         # TODO about available logic
         if self.smart_mode <= 0 or (proxy_name is None and not self.proxy_holder.available):
             connector = self.direct_connector
@@ -290,7 +297,7 @@ class RouterableConnector(SmartConnector):
         self.yaml_conf = {'router': []}
         self.load_yaml_conf()
 
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         request = kwargs['request'] if 'request' in kwargs else None
         if proxy_name is None and request is not None:
             proxy_name, condition = self.get_proxy_name(request, peer)
@@ -471,7 +478,7 @@ class CheckConnector(ProxyConnector):
     def __init__(self, proxy_holder=None, loop=None):
         super().__init__(proxy_holder=proxy_holder, loop=loop)
 
-    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs):
+    def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         logger.debug("speed_testing_proxy=%s", self.proxy_holder.speeding_proxy)
         proxy_name, proxy_ip = self.proxy_holder.speeding_proxy.split('/') if '/' in self.proxy_holder.speeding_proxy else (self.proxy_holder.speeding_proxy, None)
         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, speed_test_ip=proxy_ip, **kwargs))

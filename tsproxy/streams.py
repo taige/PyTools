@@ -298,7 +298,7 @@ class StreamReader(asyncio.StreamReader):
         else:
             logger.debug('feed_data after feed_eof is NOT allow')
 
-    def read_bytes(self, size=None, read_timeout=common.default_timeout, exactly=False):
+    def read_bytes(self, size=None, read_timeout=common.default_timeout, exactly=False) -> bytes:
         if size is None or size <= 0:
             l = len(self)
             _size = l if l > 0 else self._limit
@@ -320,7 +320,7 @@ class StreamReader(asyncio.StreamReader):
             logger.debug("%s read_bytes(%s %d %s) %s: %s", self._connection, size, read_timeout, exactly, common.clazz_fullname(ex1), ex1)
             return None
 
-    def read(self, n=None, read_timeout=common.default_timeout):
+    def read(self, n=None, read_timeout=common.default_timeout) -> bytes:
         if self._decoder:
             r = yield from self._decoder(self._connection, read_timeout)
         else:

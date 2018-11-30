@@ -614,7 +614,7 @@ class HttpResponseEncoder(streams.Encoder):
 
         return data.raw_data if isinstance(data, httphelper.ResponseMessage) else data
 
-    def rewrite_response(self, response, headers={}):
+    def rewrite_response(self, response, headers):
         buf = StringIO()
         buf.write('%s %d %s\r\n' % (response.version, response.code, response.reason))
         for key in response.headers:

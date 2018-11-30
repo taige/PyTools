@@ -386,7 +386,7 @@ class FIFOList(list):
                 if not hasattr(t, '__call__'):
                     continue
                 _t, _f, _n = t()
-                if _n == proxy_name:
+                if _n.startswith(proxy_name):
                     self.pop(idx)
                     size = list.__len__(self)
                 else:
@@ -558,12 +558,12 @@ class MyThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
                 logger.info('%s WORK DONE with %s: %s', threading.current_thread().name, clazz_fullname(ex), ex)
 
 
-def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, on_data_recv=None, on_idle=None):
+def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, on_data_recv=None, on_idle=None) -> (bytes, float):
     idle_count = 0
     # idle_start = time.time()
     first_response_time = None
     while True:
-        data = None
+        data = None  # type: bytes
         try:
             data = yield from connection.reader.read(read_timeout=1)
             if data and not peer_conn.is_closing and (stop_func is None or not stop_func(data)):

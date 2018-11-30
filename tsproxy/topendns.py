@@ -3,6 +3,7 @@ import os
 import re
 import socket
 import time
+import copy
 
 from dns.exception import Timeout
 from dns.resolver import NXDOMAIN
@@ -337,6 +338,7 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
         try:
             answers = resolver.query(qname)
             ipv4 = None
+            used = resolver.lifetime
             for a in answers:
                 if ipv4 is None:
                     ipv4 = [a.to_text()]
@@ -344,7 +346,7 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
                 else:
                     ipv4.append(a.to_text())
             if ipv4 is not None:
-                dns_cache[qname] = ipv4
+                dns_cache[qname] = copy.deepcopy(ipv4)
                 logger.log(logging.DEBUG if used < 1 else logging.INFO, 'opendns lookup %s => %s used %.2f sec', qname, ipv4, used)
                 return ipv4
         except (NoAnswer, NXDOMAIN, Timeout) as noa:
@@ -352,7 +354,7 @@ def dns_query_ex(qname, raise_on_fail=False, local_dns=False, in_cache=False, fo
         logger.log(logging.INFO, 'opendns lookup %s failed, try local lookup (used %.2f sec)', qname, (time.time() - query_start))
     try:
         ipv4 = socket.gethostbyname_ex(qname)[2]
-        dns_cache[qname] = ipv4
+        dns_cache[qname] = copy.deepcopy(ipv4)
         if ex is not None:
             logger.info('local lookup result: %s => %s for (%s:%s)', qname, ipv4, common.clazz_fullname(ex), ex)
         else:

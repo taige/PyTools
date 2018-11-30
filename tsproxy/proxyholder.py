@@ -10,7 +10,7 @@ import requests
 
 from tsproxy import common, topendns
 from tsproxy.common import fmt_human_bytes
-from tsproxy.proxy import HttpProxy, ProxyStat, ShadowsocksProxy, Socks5Proxy
+from tsproxy.proxy import Proxy, HttpProxy, ProxyStat, ShadowsocksProxy, Socks5Proxy
 import tsproxy.proxy
 
 logger = logging.getLogger(__name__)
@@ -348,7 +348,7 @@ class ProxyHolder(object):
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
-    def try_speedup_proxy(self, target_host):
+    def try_speedup_proxy(self, target_host) -> (Proxy, str):
         if target_host in self.domain_speed_map and target_host in common.speed_domains:
             for name_ip in sorted(self.domain_speed_map[target_host], key=lambda n: self.domain_speed_map[target_host][n], reverse=True):
                 _speed = fmt_human_bytes(self.domain_speed_map[target_host][name_ip])
@@ -577,7 +577,7 @@ class ProxyHolder(object):
                         logger.warning('print_domain_speed error, fmt=%s', fmt)
                         pass
 
-    def find_proxy(self, hostname):
+    def find_proxy(self, hostname) -> (Proxy, int):
         if hostname.find('@') >= 0:
             _, hostname = hostname.split('@', 1)
         if hostname.find(':') >= 0:

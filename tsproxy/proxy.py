@@ -4,7 +4,6 @@ import logging
 import os
 import socket
 import time
-import copy
 from io import BytesIO
 
 try:
@@ -138,7 +137,7 @@ class ProxyStat(dict):
                 if not hasattr(t, '__call__'):
                     continue
                 _t, _f, _n = t()
-                if _n == self._name():
+                if _n.startswith(self._name()):
                     self._pc_cache.append(_f)
             self._pc_cache_time = time.time()
 
@@ -147,30 +146,32 @@ class ProxyStat(dict):
         self._proxy_count_cache()
         return len(self._pc_cache)
 
-    # @proxy_count.setter
-    # def proxy_count(self, c):
-    #     self['proxy_count'] = c
-    # def proxy_counter(self, fail=False):
-    #     if 'proxy_count' not in self or not isinstance(self['proxy_count'], list):
-    #         self['proxy_count'] = []
-    #     self['proxy_count'].append(fail)
-    #     while len(self['proxy_count']) > common.hundred*10:
-    #         self['proxy_count'].pop(0)
-
     @property
     def total_count(self):
         if 'total_count' not in self:
-            self['total_count'] = 0
-        return self['total_count']
+            self['total_count'] = {}
+        if isinstance(self['total_count'], int):
+            if 'resolved_addr' in self:
+                addr = self['resolved_addr'][0]
+                if isinstance(addr, list):
+                    self['total_count'] = {self['resolved_addr'][0][0]: self['total_count']}
+                else:
+                    self['total_count'] = {self['resolved_addr'][0]: self['total_count']}
+            else:
+                return self['total_count']
+        c = 0
+        for k in self['total_count']:
+            c += self['total_count'][k]
+        return c
 
-    @total_count.setter
-    def total_count(self, c):
-        if 'total_count' not in self:
-            self.sess_count = c
-        else:
-            _sc = c - self['total_count']
-            self.sess_count += _sc
-        self['total_count'] = c
+    # @total_count.setter
+    # def total_count(self, c):
+    #     if 'total_count' not in self:
+    #         self.sess_count = c
+    #     else:
+    #         _sc = c - self['total_count']
+    #         self.sess_count += _sc
+    #     self['total_count'] = c
 
     @property
     def fail_count(self):
@@ -181,19 +182,27 @@ class ProxyStat(dict):
                 _fail_c += 1
         return _fail_c
 
-    # @fail_count.setter
-    # def fail_count(self, c):
-    #     self['fail_count'] = c
-
     @property
     def total_fail(self):
         if 'total_fail' not in self:
-            self['total_fail'] = 0
-        return self['total_fail']
+            self['total_fail'] = {}
+        if isinstance(self['total_fail'], int):
+            if 'resolved_addr' in self:
+                addr = self['resolved_addr'][0]
+                if isinstance(addr, list):
+                    self['total_fail'] = {self['resolved_addr'][0][0]: self['total_fail']}
+                else:
+                    self['total_fail'] = {self['resolved_addr'][0]: self['total_fail']}
+            else:
+                return self['total_fail']
+        c = 0
+        for k in self['total_fail']:
+            c += self['total_fail'][k]
+        return c
 
-    @total_fail.setter
-    def total_fail(self, c):
-        self['total_fail'] = c
+    # @total_fail.setter
+    # def total_fail(self, c):
+    #     self['total_fail'] = c
 
     @property
     def error_count(self):
@@ -272,7 +281,7 @@ class ProxyStat(dict):
                 if not hasattr(t, '__call__'):
                     continue
                 _t, _f, _n = t()
-                if _n == self._name() and _t >= 0:
+                if _n.startswith(self._name()) and _t >= 0:
                     self._resp_time.append(_t)
             self._resp_cache_time = time.time()
         return self._resp_time
@@ -416,28 +425,43 @@ class ProxyStat(dict):
         self.save_last_tp90()
         self.sess_count = 0
 
-    def update_proxy_stat(self, target_host, resp_time, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False, proxy_name=None):
+    def update_proxy_stat(self, connection, resp_time, target_host=None, proxy_ip=None, loginfo="FIRST response", proxy_fail=False, proxy_timeout=False, proxy_name=None, **kwargs):
+        if connection is not None:
+            target_host = connection.target_host
+            proxy_ip = connection.raddr
         logger.debug('proxy for %s %s use %.2f sec', target_host, loginfo, resp_time)
-        self._update_stat_info(target_host, resp_time, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout, proxy_name=proxy_name)
+        self._update_stat_info(target_host, resp_time, self_ip=proxy_ip, proxy_fail=proxy_fail, proxy_timeout=proxy_timeout, proxy_name=proxy_name)
 
     def get_proxy_stat(self, target_host, proxy_fail=False, proxy_timeout=False, resp_time=False):
         """ 如果代理响应超时或无响应，返回True """
         # TODO 先简单实现
         return self._proxy_fail_stat.get(target_host, proxy_fail) or self._proxy_timeout_stat.get(target_host, proxy_timeout)
 
-    def _update_stat_info(self, target_host, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
+    def _update_stat_info(self, target_host, resp_time, self_ip, proxy_fail=False, proxy_timeout=False, proxy_name=None):
         # with self.rlock:
         self._proxy_fail_stat[target_host] = proxy_fail
         self._proxy_timeout_stat[target_host] = proxy_timeout
+        if not self_ip:
+            if 'resolved_addr' in self:
+                self_ip = self['resolved_addr'][0][0]
+            else:
+                logger.warning("'resolved_addr' not in %s and self_ip is None", self)
+                self_ip = '0.0.0.0'
         if proxy_fail or proxy_timeout:
-            self.total_fail += 1
-        self.total_count += 1
+            if self_ip in self['total_fail']:
+                self['total_fail'][self_ip] += 1
+            else:
+                self['total_fail'][self_ip] = 1
+        if self_ip in self['total_count']:
+            self['total_count'][self_ip] += 1
+        else:
+            self['total_count'][self_ip] = 1
 
         if not proxy_fail:
             t = resp_time
         else:
             t = -1
-        ProxyStat.global_resp_time.append([t, proxy_fail or proxy_timeout, self._name()])
+        ProxyStat.global_resp_time.append([t, proxy_fail or proxy_timeout, '%s/%s' % (self._name(), self_ip)])
         count = self.proxy_count
         # end of self.rlock
 
@@ -618,18 +642,19 @@ class Proxy(ProxyStat):
     def resolved_addr(self, addr):
         if 'resolved_addr' in self:
             if sorted(addr[0]) != sorted(self.resolved_addr[0]):  # ip 有变更
-                logger.info('proxy(%s) ip changed, from %s to %s', self.short_hostname, self.resolved_addr[0], addr[0])
+                _old_info = '%s' % self
                 # remove domain speed map data
                 for ip in self.resolved_addr[0]:
                     if ip not in addr[0]:
+                        # 删除speedup数据
                         self.proxy_monitor.remove_proxy_from_domain_speed(self, ip)
-                # 重置统计数据
-                self.total_count = self.proxy_count
-                self.total_fail = self.fail_count
-                # deep copy
-                self['resolved_addr'] = copy.deepcopy(addr)
-        else:
-            self['resolved_addr'] = copy.deepcopy(addr)
+                        # 删除resp_time数据
+                        ProxyStat.global_resp_time.checkout('%s/%s' % (self.hostname, ip))
+                        # 重置统计数据
+                        self['total_count'].pop(ip, None)
+                        self['total_fail'].pop(ip, None)
+                logger.info('proxy(%s) ip changed, from %s/%s to %s/%s, ', self.short_hostname, _old_info, self.resolved_addr[0], self, addr[0])
+        self['resolved_addr'] = addr
 
     @property
     def forward_flag(self):
@@ -669,11 +694,11 @@ class Proxy(ProxyStat):
             _log_speed = None
         _, first_res_time = yield from common.forward_forever(connection, peer_conn, on_data_recv=_log_speed, on_idle=self.on_idle)
         if connection.response_timeout:
-            self.update_proxy_stat(connection.target_host, time.time() - connection.create_time, loginfo="response timeout", proxy_timeout=True)
+            self.update_proxy_stat(connection, time.time() - connection.create_time, loginfo="response timeout", proxy_timeout=True)
         elif not first_res_time:
-            self.update_proxy_stat(connection.target_host, time.time() - connection.create_time, loginfo="be closed with no response", proxy_fail=True)
+            self.update_proxy_stat(connection, time.time() - connection.create_time, loginfo="be closed with no response", proxy_fail=True)
         else:
-            self.update_proxy_stat(connection.target_host, first_res_time - connection.create_time)
+            self.update_proxy_stat(connection, first_res_time - connection.create_time)
             if _log_speed is not None:
                 connection['_realtime_speed_'] = _mutable_data_count[0] / (_mutable_data_count[2] + _mutable_data_count[3])
                 if int(time.time()) != _mutable_data_count[4]:
@@ -696,7 +721,7 @@ class DirectForward(Proxy):
     def __init__(self):
         super().__init__(None, 'D')
 
-    def _update_stat_info(self, target_host, resp_time, proxy_fail=False, proxy_timeout=False, proxy_name=None):
+    def _update_stat_info(self, target_host, resp_time, self_ip, proxy_fail=False, proxy_timeout=False, proxy_name=None):
         pass
 
     @property
