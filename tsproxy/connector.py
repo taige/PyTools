@@ -142,7 +142,7 @@ class ProxyConnector(Connector):
                 return proxy_conn
             except BaseException as ex:
                 err_no = common.errno_from_exception(ex)
-                if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH) \
+                if err_no not in common.network_errors \
                         and i + 1 < len(proxy_ips) > 1 and left_time > 0:
                     proxy.update_proxy_stat(None, time.time() - _start, target_host=target_host, proxy_ip=proxy_ip,
                                             loginfo='_connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex, asyncio.TimeoutError) else ex), proxy_fail=True, **kwargs)
@@ -196,7 +196,7 @@ class ProxyConnector(Connector):
                 # move the head to tail
                 used = time.time()-timeout+common.default_timeout
                 err_no = common.errno_from_exception(ex1)
-                if err_no not in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH):
+                if err_no not in common.network_errors:
                     if proxy_name is not None or speedup_ip is not None \
                             or self.proxy_holder.move_head_to_tail(proxy, logging.WARNING, 'connect %s: %s', common.clazz_fullname(ex1), ex1):
                         proxy.error_time = time.time()
@@ -215,7 +215,7 @@ class ProxyConnector(Connector):
         if connect_ex:
             err_no = common.errno_from_exception(connect_ex)
             if isinstance(connect_ex, OSError) \
-                    and (err_no in (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH) or isinstance(connect_ex, socket.gaierror)):
+                    and (err_no in common.network_errors or isinstance(connect_ex, socket.gaierror)):
                 raise ConnectionError(err_no, connect_ex.strerror) from connect_ex
             else:
                 raise connect_ex

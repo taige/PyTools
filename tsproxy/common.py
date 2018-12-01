@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import traceback
+import errno
 from io import StringIO
 from configparser import ConfigParser
 from urllib.parse import urlparse
@@ -74,6 +75,9 @@ speed_hosts_file = None
 speed_hosts_update = 0
 speed_hosts_file_mod = 0
 
+_network_errors = (errno.ENETDOWN, errno.ENETRESET, errno.ENETUNREACH, errno.EHOSTDOWN, errno.EHOSTUNREACH)
+network_errors = set(_network_errors)
+
 
 def load_tsproxy_conf(conf_file):
     global hundred
@@ -102,6 +106,9 @@ def load_tsproxy_conf(conf_file):
 
     global apnic_latest_url
     global apnic_expired_days
+
+    global _network_errors
+    global network_errors
 
     global speed_lifetime
     global speed_test_timeout
@@ -142,6 +149,19 @@ def load_tsproxy_conf(conf_file):
 
     apnic_latest_url = _common_conf_get(config.get, "apnic_latest_url", apnic_latest_url)
     apnic_expired_days = _common_conf_get(config.getint, "apnic_expired_days", apnic_expired_days)
+
+    __network_errors = _common_conf_get(config.get, "network_errors", None)
+    if __network_errors:
+        network_errors.clear()
+        _buf = __network_errors.split(',')
+        _buf.extend(_network_errors)
+        for e in _buf:
+            e = int(e)
+            if e not in errno.errorcode:
+                logger.info('unknow network error code: %d', e)
+                continue
+            network_errors.add(e)
+            logger.info('NETWORK_ERROR: %d %s', e, errno.errorcode[e])
 
     if config.has_section("speed_test"):
         if config.has_section('speed_test'):

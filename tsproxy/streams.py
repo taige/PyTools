@@ -291,7 +291,7 @@ class StreamReader(asyncio.StreamReader):
         return self._recv_bytes
 
     def feed_data(self, data):
-        if not self.at_eof():
+        if not self._eof:
             super().feed_data(data)
             self._recv_bytes += len(data)
             self._active_time = time.time()
