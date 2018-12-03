@@ -629,7 +629,7 @@ class ProxyHolder(object):
                     checking_proxy.add(p)
                     if checking_reason.find(r) < 0:
                         checking_reason += ', %s' % r
-            except asyncio.TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 timeout = True
             except CancelledError:
                 break

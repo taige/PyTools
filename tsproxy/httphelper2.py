@@ -141,7 +141,7 @@ class HttpRequestParser(HttpParser):
             return None
         except errors.HttpProcessingError as bad_req:
             return bad_request(bad_req, request_line, request_time=request_time)
-        except asyncio.TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return bad_request(errors.BadHttpMessage('read request timeout(%d)' % read_timeout), request_line, method, version, url, close, request_time=request_time)
         except asyncio.LimitOverrunError as exc:
             return bad_request(errors.LineTooLong('%s' % raw_data, exc.consumed), request_line, method, version, url, close, request_time=request_time)

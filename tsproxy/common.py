@@ -602,7 +602,7 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
         except ConnectionError as conn_err:
             logger.info("forward_forever(%s) %s: %s", connection, clazz_fullname(conn_err), conn_err)
             break
-        except asyncio.TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             idle_time = connection.idle_time  # time.time() - idle_start
             if idle_time > close_on_idle_timeout:
                 logger.debug("%s going to close for idle#%d timeout %.0f seconds", connection, idle_count, idle_time)

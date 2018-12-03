@@ -145,7 +145,7 @@ class ProxyConnector(Connector):
                 if err_no not in common.network_errors \
                         and i + 1 < len(proxy_ips) > 1 and left_time > 0:
                     proxy.update_proxy_stat(None, time.time() - _start, target_host=target_host, proxy_ip=proxy_ip,
-                                            loginfo='_connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex, asyncio.TimeoutError) else ex), proxy_fail=True, **kwargs)
+                                            loginfo='_connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex, asyncio.TimeoutError) or isinstance(ex, TimeoutError) else ex), proxy_fail=True, **kwargs)
                     _ip = proxy_ips.pop(0)
                     proxy_ips.append(_ip)
                     logger.info('connect to %s/%s failed: %s, try next ip(%s/%s) try again...', proxy_host, proxy_ip, ex, proxy_host, proxy_ips[0])
@@ -202,7 +202,7 @@ class ProxyConnector(Connector):
                         proxy.error_time = time.time()
                         proxy.error_count += 1
                         proxy_ip = ex1.__dict__.pop('__proxy_ip__', None)
-                        proxy.update_proxy_stat(None, used, target_host=target_host, proxy_ip=proxy_ip, loginfo='connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex1, asyncio.TimeoutError) else ex1), proxy_fail=True, proxy_name=proxy_name)
+                        proxy.update_proxy_stat(None, used, target_host=target_host, proxy_ip=proxy_ip, loginfo='connect failed(%s)' % ('timeout[%.1fs]' % left_time if isinstance(ex1, asyncio.TimeoutError) or isinstance(ex1, TimeoutError) else ex1), proxy_fail=True, proxy_name=proxy_name)
                         if proxy_name is None:
                             self.proxy_holder.check(proxy, '%s: %s' % (common.clazz_fullname(ex1), ex1))
                 else:
@@ -313,7 +313,7 @@ class RouterableConnector(SmartConnector):
                     # 对于指定代理服务器的规则，如果代理服务器不可用，则用默认代理尝试连接一次，并禁止该规则5分钟
                     try:
                         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, connect_timeout=3, **kwargs))
-                    except (asyncio.TimeoutError, socket.gaierror, ConnectionError) as ex:
+                    except (TimeoutError, asyncio.TimeoutError, socket.gaierror, ConnectionError) as ex:
                         logger.info('pause router: %s casue %s', condition, ex)
                         self.yaml_conf[condition + '.pause'] = time.time()
                         return (yield from self.proxy_connector.connect(peer, target_host, target_port, loop=loop, **kwargs))

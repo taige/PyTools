@@ -161,7 +161,7 @@ class HttpListener(Listener):
         except concurrent.futures.CancelledError:
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 500, 'Proxy is close(TSP)'))
             return False
-        except asyncio.TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             connection.set_attr(HTTP_RESPONSE, httphelper.http_response(head_request.version, 503, 'Connect proxy timeout(TSP)'))
             return False
         except socket.gaierror as ex:
@@ -549,11 +549,14 @@ class HttpRequestDecoder(streams.Decoder):
             # parse bytes to request object
             left_time = start_time + read_timeout - time.time()
             request = yield from self._http_parser.parse_request(connection.reader, request, read_timeout=left_time if left_time >= 1 else 1)
-        except asyncio.TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             if HTTP_REQUEST in connection:
                 raise
             else:
                 request = httphelper.bad_request(timeout=read_timeout, request_time=start_time)
+        except OSError as ex:
+            logger.info("%s parse_request fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
+            return None
         except Exception as ex:
             logger.exception("%s parse_request fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
             return None

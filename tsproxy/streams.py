@@ -41,7 +41,7 @@ def start_connection(handler, ip, port, host=None, *, loop=None, encoder=None, d
         logger.debug('connected (%s/%s:%d) used %.3f seconds', host, ip, port, (time.time() - create_time))
     except BaseException as ex:
         if isinstance(ex, ConnectionError) \
-                or isinstance(ex, asyncio.TimeoutError):
+                or isinstance(ex, asyncio.TimeoutError) or isinstance(ex, TimeoutError):
             topendns.del_cache(host)
         raise
 
@@ -107,6 +107,10 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
                 def wrapper():
                     try:
                         yield from res
+                    except ConnectionError as ex:
+                        logger.debug("handle connect %s %s: %s", self._connection, common.clazz_fullname(ex), ex)
+                    except OSError as ex:
+                        logger.info("handle connect %s %s: %s", self._connection, common.clazz_fullname(ex), ex)
                     except BaseException as ex:
                         logger.exception("handle connect %s %s: %s", self._connection, common.clazz_fullname(ex), ex)
                     finally:
