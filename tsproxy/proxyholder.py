@@ -333,7 +333,8 @@ class ProxyHolder(object):
         #     futures.append(self._test_proxy(None, test_url, reason))
 
         network_is_ok = False
-        if len(futures) > 1:
+        if len(futures) > 0:
+            speed_tested = False
             done, pending = yield from asyncio.wait(futures, loop=self._loop)
             for f in done:
                 status_code, local_ip = f.result()
@@ -351,8 +352,13 @@ class ProxyHolder(object):
                             self.wan_ip = wan_ip
                             logger.info("WAN IP: %s", wan_ip)
                             yield from self.test_proxies_speed()
+                            speed_tested = True
                         break
-
+            if not speed_tested and common.KEY_IP_CHANGED in reason:
+                speed_hosts = []
+                for px in test_list:
+                    speed_hosts.append(px.short_hostname)
+                yield from self.test_proxies_speed(speed_hosts)
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
@@ -628,17 +634,21 @@ class ProxyHolder(object):
         check_interval = 0.1
         while not self.shutdowning:
             timeout = False
-            checking_proxy = set()
+            checking_proxy = {}
             try:
                 with common.Timeout(check_interval):
                     p, checking_reason = yield from self.proxy_check_queue.get()
-                    checking_proxy.add(p)
+                    checking_proxy[p.short_hostname] = checking_reason
                 yield from asyncio.sleep(1, loop=loop)
                 while not self.proxy_check_queue.empty():
                     p, r = self.proxy_check_queue.get_nowait()
-                    checking_proxy.add(p)
-                    if checking_reason.find(r) < 0:
-                        checking_reason += ', %s' % r
+                    if p.short_hostname in checking_proxy:
+                        checking_reason = checking_proxy[p.short_hostname]
+                        if checking_reason.find(r) < 0:
+                            checking_reason += ', %s' % r
+                            checking_proxy[p.short_hostname] = checking_reason
+                    else:
+                        checking_proxy[p.short_hostname] = r
             except (TimeoutError, asyncio.TimeoutError):
                 timeout = True
             except CancelledError:
@@ -655,7 +665,9 @@ class ProxyHolder(object):
                         check_interval = common.default_timeout
                     logger.debug("check_interval=%d", check_interval)
                 else:
-                    for p in checking_proxy:
+                    for p_sn in checking_proxy:
+                        checking_reason = checking_proxy[p_sn]
+                        p, _ = self.find_proxy(p_sn)
                         if p.fail_rate > common.fail_rate_threshold or p.error_count > 0:
                             self.notify_monitor('restart' if p.fail_rate < 0.9 or p.error_count > 0 else 'check', p)
                         # yield from self._test_proxy(p.short_hostname, reason=checking_reason)

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 KEY_FIRST_HTTP_REQUEST = 'FIRST_HTTP_REQUEST'
 HTTPS_METHOD_CONNECT = 'CONNECT'
+KEY_IP_CHANGED = 'KEY_ip_changed'
 
 Timeout = timeout
 

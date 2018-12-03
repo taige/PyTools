@@ -618,17 +618,17 @@ class HttpResponseEncoder(streams.Encoder):
         return data.raw_data if isinstance(data, httphelper.ResponseMessage) else data
 
     def rewrite_response(self, response, headers):
-        buf = StringIO()
-        buf.write('%s %d %s\r\n' % (response.version, response.code, response.reason))
+        buf = BytesIO()
+        buf.write(('%s %d %s\r\n' % (response.version, response.code, response.reason)).encode())
         for key in response.headers:
             if key in headers:
                 continue
-            buf.write('%s: %s\r\n' % (key, response.headers[key]))
+            buf.write(('%s: %s\r\n' % (key, response.headers[key])).encode())
         for key in headers:
-            buf.write('%s: %s\r\n' % (key, headers[key]))
-        buf.write('\r\n')
-        buf.write('%s' % response.body)
-        return buf.getvalue().encode()
+            buf.write(('%s: %s\r\n' % (key, headers[key])).encode())
+        buf.write(b'\r\n')
+        buf.write(response.body)
+        return buf.getvalue()
 
 
 LOGGED = 'LOGGED'

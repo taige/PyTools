@@ -102,10 +102,10 @@ class ProxyConnector(Connector):
             yield from proxy.init_connection(_conn, target_host, target_port, **kwargs)
 
         start_time = time.time()
-        timeout = connect_timeout + time.time()
         proxy_host, proxy_port = proxy.addr
         peer.set_attr(tsproxy.proxy.PROXY_NAME, proxy.short_hostname)
 
+        ip_changed = False
         if speed_test_ip is not None:
             logger.debug('speed_testing %s/%s ...', proxy_host, speed_test_ip)
             proxy_ips = [speed_test_ip]
@@ -115,6 +115,8 @@ class ProxyConnector(Connector):
         else:
             try:
                 proxy_ips = yield from topendns.async_dns_query(proxy_host, raise_on_fail=True, ex_func=True, loop=loop)
+                if proxy.resolved_addr and sorted(proxy_ips) != sorted(proxy.resolved_addr[0]):
+                    ip_changed = True
                 proxy.resolved_addr = (proxy_ips, proxy_port)
             except socket.gaierror as ex:
                 # DNS解析失败，则用之前解析的IP地址进行一次尝试
@@ -153,6 +155,9 @@ class ProxyConnector(Connector):
                 else:
                     ex.__dict__['__proxy_ip__'] = proxy_ip
                     raise ex
+            finally:
+                if ip_changed:
+                    self.proxy_holder.check(proxy, common.KEY_IP_CHANGED)
 
     @asyncio.coroutine
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
