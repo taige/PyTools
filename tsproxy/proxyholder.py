@@ -74,7 +74,7 @@ class ProxyHolder(object):
         self.local_ip = None
         self.last_speed_test_time = 0
         self.speeding_proxy = None
-        self.checking_proxy = None
+        self.checking_proxy = set()
         self.auto_pause_list = set()
         self.speed_urls_idx = 0
         self.domain_speed_map = {}
@@ -288,7 +288,7 @@ class ProxyHolder(object):
         res = None
         try:
             if proxy_name:
-                self.checking_proxy = proxy_name
+                self.checking_proxy.add(proxy_name)
 
             def async_request():
                 headers = {
@@ -314,7 +314,8 @@ class ProxyHolder(object):
         except BaseException as ex:
             logger.info('_test_proxy(%s, %s) %s: %s', proxy_name, reason, common.clazz_fullname(ex), ex)
         finally:
-            self.checking_proxy = None
+            if proxy_name:
+                self.checking_proxy.remove(proxy_name)
             if res:
                 res.close()
         return 500, None
@@ -626,7 +627,7 @@ class ProxyHolder(object):
         self.remove_proxy_from_domain_speed(proxy)
 
     def check(self, proxy, reason):
-        if self.checking_proxy and self.checking_proxy.startswith(proxy.short_hostname):
+        if self.checking_proxy and proxy.short_hostname in self.checking_proxy and common.KEY_IP_CHANGED not in reason:
             return
         self.proxy_check_queue.put_nowait((proxy, reason))
 

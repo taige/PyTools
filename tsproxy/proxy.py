@@ -5,6 +5,7 @@ import os
 import socket
 import time
 from io import BytesIO
+from io import StringIO
 
 try:
     from shadowsocks.cryptor import Cryptor
@@ -505,12 +506,9 @@ class Proxy(ProxyStat):
         return self.hostname
 
     def __repr__(self):
-        s = '<%s://%s/%d tp90:%.1f/%d count:%d/f%d//%d/f%d%s>' % \
-            (self.protocol, self.short_hostname, self.port, self.tp90, self._tp90_len, self.total_count, self.total_fail,
-             self.proxy_count, self.fail_count,
-             '%s%s%s' % ('' if self.down_speed <= 0 else ' speed=%sB/S' % common.fmt_human_bytes(self.down_speed),
-                         ' %s' % format(int(self.sort_key), ',') if 'sort_key' in self else '', '=' if self.pause else '>'))
-        return s
+        s = StringIO()
+        self.print_info(out=s)
+        return s.getvalue()
 
     def _id_str_(self):
         return '%s/%s/%d' % (super()._id_str_(), self.hostname, self.port)
@@ -569,15 +567,15 @@ class Proxy(ProxyStat):
             fr2 = 100*(0 if self.proxy_count == 0 else self.fail_count/self.proxy_count)
             count_fmt1 = '%%%ds' % len(format(max_total_count, ','))
             count_fmt2 = '%%%ds' % len(format(max_sess_count, ','))
-            output = "PROXY%4s %s %-20s %-14s count=%s/%s|%s/%s" % \
-                     ('' if index is None else '[%2d]' % index,
+            output = "%s%s %-20s %-14s count=%s/%s|%s/%s%s" % \
+                     ('【' if index is None else 'PROXY[%2d] ' % index,
                       '~' if self.pause and self.hostname in self.proxy_monitor.auto_pause_list else '=' if self.pause else '>',
                       '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
                       'tp90=%.1fs/%d' % (self.tp90, self.tp90_len),
                       count_fmt1 % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
                       ('f%.0f.%%' if fr1 > 9.95 else 'f%.1f%%') % fr1,
                       count_fmt2 % format(self.proxy_count, ','),
-                      ('f%.0f.%%' if fr2 > 9.95 else 'f%.1f%%') % fr2
+                      ('f%.0f.%%' if fr2 > 9.95 else 'f%.1f%%') % fr2, '】' if index is None else ''
                       )
             if 'down_speed_settime' in self and (time.time() - self['down_speed_settime']) < 24*3600:
                 output += ' S=%s' % str_datetime(timestamp=self['down_speed_settime'], fmt='%H:%M:%S,%f', end=12)
@@ -588,7 +586,7 @@ class Proxy(ProxyStat):
             if high_light:
                 output = '\x1b[1;31;48m%s\x1b[0m' % output
             if out:
-                out.write('%s\r\n' % output)
+                out.write('%s' % output)
             else:
                 logger.info(output)
             return 1

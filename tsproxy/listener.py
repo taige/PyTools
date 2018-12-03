@@ -486,6 +486,7 @@ class ManageableHttpListener(HttpListener):
         for i in range(0, self.proxy_holder.psize):
             _proxy = self.proxy_holder.proxy_list[i]
             _proxy.print_info(i, out=out, max_total_count=_max_total_count, max_sess_count=_max_sess_count, high_light=(high_light_proxies is not None and _proxy.short_hostname in high_light_proxies))
+            out.write('\r\n')
 
     def do_domain(self, out):
         self.proxy_holder.print_domain_speed(fmt='%-20s -> %s/%-15s @%-6s S=%s\r\n', out=out)
