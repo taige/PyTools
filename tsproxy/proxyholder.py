@@ -56,7 +56,7 @@ def get_wan_ip():
 
 class ProxyHolder(object):
 
-    def __init__(self, proxy_port, loop=None, proxy_file='proxies.json'):
+    def __init__(self, proxy_port, loop=None):
         self._loop = loop if loop else asyncio.get_event_loop()
         self.monitor_port = 0
         self._proxy_port = proxy_port
@@ -69,7 +69,6 @@ class ProxyHolder(object):
         self._executor = None
         self.speed_testing = False
         self.shutdowning = False
-        self.dump_file = proxy_file
         self.fix_top = False
         self.wan_ip = None
         self.local_ip = None
@@ -80,6 +79,15 @@ class ProxyHolder(object):
         self.speed_urls_idx = 0
         self.domain_speed_map = {}
         self._available = True
+        self._dump_all_func = None
+
+    @property
+    def dump_all_func(self):
+        return self._dump_all_func
+
+    @dump_all_func.setter
+    def dump_all_func(self, func):
+        self._dump_all_func = func
 
     @property
     def available(self):
@@ -542,6 +550,8 @@ class ProxyHolder(object):
         finally:
             self.speed_testing = False
         logger.info("test_proxies_speed DONE#%d for move_head=%s[%s]", retried, move_head, self.head_proxy)
+        if self._dump_all_func is not None:
+            self._dump_all_func()
         self.print_domain_speed()
         return code
 

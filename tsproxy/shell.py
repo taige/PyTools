@@ -159,7 +159,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
 
     asyncio.set_event_loop(uvloop.new_event_loop())
     loop = asyncio.get_event_loop()
-    proxy_holder = ProxyHolder(http_port+1, proxy_file=proxy_file)
+    proxy_holder = ProxyHolder(http_port+1, loop=loop)
     if not proxies:
         proxy_holder.load_json(j_in)
     else:
@@ -178,7 +178,7 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
         if sig_num == signal.SIGQUIT:
             print_stack_trace()
             return
-        logger.debug('received %s, do graceful closing ...',
+        logger.info('received %s, do graceful closing ...',
                      'SIGTERM' if sig_num == signal.SIGTERM else
                      'SIGINT' if sig_num == signal.SIGINT else '%d' % sig_num)
         try:
@@ -204,6 +204,9 @@ def startup(*proxies, http_port=8080, http_address='127.0.0.1', proxy_file='prox
         with open(proxy_file + '.ing', 'w') as pf:
             json.dump(j_dump, pf, indent=2, sort_keys=True)
         os.rename(proxy_file + '.ing', proxy_file)
+        logger.info('dump all data to %s', proxy_file)
+
+    proxy_holder.dump_all_func = dump_config
 
     http_proxy = ManageableHttpListener(listen_addr=(http_address, http_port),
                                         connector=RouterableConnector(proxy_holder, smart_mode, loop, **kwargs),
