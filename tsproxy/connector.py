@@ -484,6 +484,9 @@ class CheckConnector(ProxyConnector):
         super().__init__(proxy_holder=proxy_holder, loop=loop)
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
-        logger.debug("speed_testing_proxy=%s", self.proxy_holder.speeding_proxy)
-        proxy_name, proxy_ip = self.proxy_holder.speeding_proxy.split('/') if '/' in self.proxy_holder.speeding_proxy else (self.proxy_holder.speeding_proxy, None)
+        speeding_proxy = self.proxy_holder.speeding_proxy
+        if speeding_proxy:
+            raise ConnectionError('speed_testing_proxy is None')
+        logger.debug("speed_testing_proxy=%s", speeding_proxy)
+        proxy_name, proxy_ip = speeding_proxy.split('/') if '/' in speeding_proxy else (speeding_proxy, None)
         return (yield from super().connect(peer, target_host, target_port, proxy_name=proxy_name, loop=loop, speed_test_ip=proxy_ip, **kwargs))

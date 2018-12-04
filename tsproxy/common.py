@@ -600,10 +600,7 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
                 idle_count = 0
             else:
                 break
-        except ConnectionError as conn_err:
-            logger.info("forward_forever(%s) %s: %s", connection, clazz_fullname(conn_err), conn_err)
-            break
-        except (TimeoutError, asyncio.TimeoutError):
+        except asyncio.TimeoutError:
             idle_time = connection.idle_time  # time.time() - idle_start
             if idle_time > close_on_idle_timeout:
                 logger.debug("%s going to close for idle#%d timeout %.0f seconds", connection, idle_count, idle_time)
@@ -626,6 +623,18 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
                 else:
                     logger.debug("%s IDLE#%d for %.0f seconds and going to close", connection, idle_count, idle_time)
                     break
+        except ConnectionError as conn_err:
+            logger.info("forward_forever(%s) %s: %s", connection, clazz_fullname(conn_err), conn_err)
+            break
+        except OSError as ex:
+            logger.warning("forward_forever(%s) %s: %s", connection, clazz_fullname(ex), ex)
+            break
+        except Exception as ex:
+            logger.error("forward_forever(%s) %s: %s", connection, clazz_fullname(ex), ex)
+            break
+        except BaseException as ex:
+            logger.exception("forward_forever(%s) %s: %s", connection, clazz_fullname(ex), ex)
+            break
     if not is_responsed:
         peer_conn.close()
     return data, first_response_time

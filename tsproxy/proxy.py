@@ -945,8 +945,11 @@ class ShadowsocksDecoder(streams.Decoder):
             data = yield from connection.reader.read_bytes(read_timeout=read_timeout)
             if not data:
                 return None
-        except (TimeoutError, asyncio.TimeoutError):
+        except asyncio.TimeoutError:
             raise
+        except TimeoutError as ex:
+            logger.warning("%s shadowsocks read fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
+            return None
         except Exception as ex:
             logger.exception("%s shadowsocks read fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
             return None
