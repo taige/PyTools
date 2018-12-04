@@ -344,14 +344,14 @@ class ProxyHolder(object):
                     if (time.time() - self.last_speed_test_time) > common.tp90_expired_time or self.local_ip is None or (local_ip is not None and self.local_ip != local_ip):
                         # speed value life time: 3 hours
                         # OR local/wan access changed
-                        logger.info("LOCAL IP: %s", local_ip)
+                        logger.info("LOCAL IP: %s => %s", self.local_ip, local_ip)
                         wan_ip = yield from self._loop.run_in_executor(self.executor, get_wan_ip)
                         if wan_ip is not None:
                             self.local_ip = local_ip
                         if (time.time() - self.last_speed_test_time) > common.tp90_expired_time or self.wan_ip is None or (wan_ip is not None and self.wan_ip != wan_ip):
                             # self.last_speed_test_time = time.time()
+                            logger.info("WAN IP: %s => %s", self.wan_ip, wan_ip)
                             self.wan_ip = wan_ip
-                            logger.info("WAN IP: %s", wan_ip)
                             yield from self.test_proxies_speed()
                             speed_tested = True
                         break

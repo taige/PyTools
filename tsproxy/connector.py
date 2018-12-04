@@ -485,7 +485,7 @@ class CheckConnector(ProxyConnector):
 
     def connect(self, peer, target_host, target_port, proxy_name=None, loop=None, **kwargs) -> streams.StreamConnection:
         speeding_proxy = self.proxy_holder.speeding_proxy
-        if speeding_proxy:
+        if not speeding_proxy:
             raise ConnectionError('speed_testing_proxy is None')
         logger.debug("speed_testing_proxy=%s", speeding_proxy)
         proxy_name, proxy_ip = speeding_proxy.split('/') if '/' in speeding_proxy else (speeding_proxy, None)
