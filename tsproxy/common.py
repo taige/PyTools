@@ -81,6 +81,7 @@ network_errors = set(_network_errors)
 
 
 def load_tsproxy_conf(conf_file):
+    global default_timeout
     global hundred
     # proxy timeout config
     global proxy_idle_sec
@@ -135,6 +136,7 @@ def load_tsproxy_conf(conf_file):
 
     if config.has_section('common'):
         logger.info('tsproxy.conf: [common] %s', config.items('common'))
+    default_timeout = _common_conf_get(config.getint, "default_timeout", default_timeout)
     hundred = _common_conf_get(config.getint, "hundred", hundred)
     proxy_idle_sec = _common_conf_get(config.getint, "proxy_idle_sec", proxy_idle_sec)
     proxys_check_timeout = _common_conf_get(config.getint, "proxys_check_timeout", proxys_check_timeout)
@@ -609,11 +611,11 @@ def forward_forever(connection, peer_conn, is_responsed=False, stop_func=None, o
                 logger.debug("%s going to close for peer %s is closing", connection, peer_conn)
                 break
             _idle_count = int(idle_time) % default_timeout
-            if _idle_count != 0:
+            if _idle_count != 0 or idle_time < 1:  # idle_time 接近1但<1时，int()直接截成0，使 _idle_count == 0，故增加条件 idle_time < 1
                 # logger.log(5, "%s idle#%d.%d for %.1f second", connection, idle_count, _idle_count, idle_time)
                 continue
             if not is_responsed:
-                logger.info("%s response timeout %.0f seconds", connection, idle_time)
+                logger.info("%s response timeout %f seconds [#%d]", connection, idle_time, _idle_count)
                 connection.response_timeout = True
                 break
             else:
