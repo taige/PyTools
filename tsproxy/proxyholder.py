@@ -398,7 +398,10 @@ class ProxyHolder(object):
             headers['Referer'] = common.speed_index_url
         if bytes_range:
             headers['Range'] = 'bytes=0-%d' % bytes_range
-        proxy_ips = topendns.dns_query_ex(proxy.hostname, raise_on_fail=True)
+        proxy_ips = topendns.dns_query_ex(proxy.hostname, raise_on_fail=False)
+        if proxy_ips is None:
+            logger.warning("_speed_test %s DNS fail ...", proxy.short_hostname)
+            return -505
         if len(proxy_ips) > 1:
             logger.debug("going to _speed_test %s/%s ...", proxy.short_hostname, proxy_ips)
 

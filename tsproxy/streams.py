@@ -51,6 +51,11 @@ def start_connection(handler, ip, port, host=None, *, loop=None, encoder=None, d
 
     _, protocol = yield from loop.create_connection(factory, sock=sock)
 
+    if protocol.connection is None:
+        if hasattr(protocol, 'init_exception') and protocol.init_exception is not None:
+            raise protocol.init_exception
+        else:
+            raise ConnectionError('connect to %s/%s:%d failed' % (host, ip, port))
     return protocol.connection
 
 
@@ -72,8 +77,16 @@ class StreamProtocol(asyncio.StreamReaderProtocol):
         self._encoder = encoder
         self._acl_ips = acl_ips
         self._close_waiter = None
+        self.init_exception = None
 
     def connection_made(self, transport):
+        try:
+            self._connection_made(transport)
+        except BaseException as ex:
+            self.init_exception = ex
+            raise
+
+    def _connection_made(self, transport):
         _socket = transport.get_extra_info('socket')
         if _socket is None:
             raise Exception("socket is None")
