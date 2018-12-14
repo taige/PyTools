@@ -321,6 +321,8 @@ class ManageableHttpListener(HttpListener):
                 cont_type = 'text/plain'
             connection.writer.write(httphelper.http_response(request.version, code, headers={
                 'Content-Type': cont_type,
+                'Cache-Control': 'no-store',
+                'Pragma': 'no-cache',
                 'Connection': 'close'
             }, content=res_cont))
         except BaseException as e:
