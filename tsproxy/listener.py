@@ -112,8 +112,10 @@ class HttpListener(Listener):
             return
         try:
             for c in psutil.net_connections(kind='tcp'):
-                if connection.laddr == c.laddr[0] and connection.lport == c.laddr[1]:
-                    if c.pid and c.pid != self._pid:
+                if connection.lport == c.laddr[1] and c.pid and c.pid != self._pid:
+                    ip1 = int.from_bytes(socket.inet_pton(c.family, c.laddr[0]), byteorder='big')
+                    ip2 = int.from_bytes(socket.inet_pton(connection.family, connection.laddr), byteorder='big')
+                    if ip1 == ip2:
                         if c.pid in self._processes:
                             proc = self._processes[c.pid]
                         else:

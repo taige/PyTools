@@ -204,6 +204,7 @@ class StreamConnection(dict):
         else:
             _client = self._sock.getsockname()
             _server = self._sock.getpeername()
+        self.family = self._sock.family
         self.laddr = _client[0]
         self.lport = _client[1]  # client
         self.raddr = _server[0]
