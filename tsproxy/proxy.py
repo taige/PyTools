@@ -448,6 +448,8 @@ class ProxyStat(dict):
             else:
                 logger.warning("'resolved_addr' not in %s and self_ip is None", self)
                 self_ip = '0.0.0.0'
+        self.setdefault('total_fail', {})
+        self.setdefault('total_count', {})
         if proxy_fail or proxy_timeout:
             if self_ip in self['total_fail']:
                 self['total_fail'][self_ip] += 1
@@ -568,14 +570,14 @@ class Proxy(ProxyStat):
             count_fmt1 = '%%%ds' % len(format(max_total_count, ','))
             count_fmt2 = '%%%ds' % len(format(max_sess_count, ','))
             output = "%s%s %-20s %-14s count=%s/%s|%s/%s%s" % \
-                     ('【' if index is None else 'PROXY[%2d] ' % index,
+                     ('[' if index is None else 'PROXY[%2d] ' % index,
                       '~' if self.pause and self.hostname in self.proxy_monitor.auto_pause_list else '=' if self.pause else '>',
                       '%s://%s:%d' % (self.protocol, self.short_hostname, self.port),
                       'tp90=%.1fs/%d' % (self.tp90, self.tp90_len),
                       count_fmt1 % format(self.proxy_count if self.total_count == 0 else self.total_count, ','),
                       ('f%.0f.%%' if fr1 > 9.95 else 'f%.1f%%') % fr1,
                       count_fmt2 % format(self.proxy_count, ','),
-                      ('f%.0f.%%' if fr2 > 9.95 else 'f%.1f%%') % fr2, '】' if index is None else ''
+                      ('f%.0f.%%' if fr2 > 9.95 else 'f%.1f%%') % fr2, ']' if index is None else ''
                       )
             if 'down_speed_settime' in self and (time.time() - self['down_speed_settime']) < 24*3600:
                 output += ' S=%s' % str_datetime(timestamp=self['down_speed_settime'], fmt='%H:%M:%S,%f', end=12)

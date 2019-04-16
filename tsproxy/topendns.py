@@ -382,6 +382,25 @@ def is_subnet(ipv4, netlist):
     return False
 
 
+def subnet_to_ipmask(ipv4):
+    star_count = ipv4.count('*')
+    if ipv4.count('/') == 1:
+        _ipv4, num_ip = ipv4.split('/')
+        num_ip = 2 ** (32 - int(num_ip))
+    elif 0 <= star_count <= 4:
+        _ipv4 = ipv4.replace('*', '0')
+        num_ip = 256 ** star_count
+    else:
+        return None, None
+
+    if not is_ipv4(_ipv4):
+        logger.warning("%s is NOT ipv4", ipv4)
+        return None, None
+    starting_ip = int.from_bytes(socket.inet_aton(_ipv4), byteorder='big')
+    imask = 0xffffffff ^ (num_ip-1)
+    return starting_ip, imask
+
+
 def is_cn_ip(atype, addr, return_country=False):
     global cn_ip_list
     global cn_addr_cache
@@ -476,6 +495,9 @@ if __name__ == '__main__':
     import sys
     from tsproxy.common import print_stack_trace
 
+    print('%s %x' % subnet_to_ipmask('192.168.0.*'))
+    print('%s %x' % subnet_to_ipmask('192.168.0.0/17'))
+
     def term_handler(signum, _):
         if signum == signal.SIGQUIT:
             print_stack_trace()
@@ -499,5 +521,5 @@ if __name__ == '__main__':
     _is_cn = is_cn_ip(0x03, 'jp.a.cloudss.win')
     print(_is_cn)
     for i in range(1, 10):
-        _ipv4 = dns_query_ex('sg.a.cloudss.win', force_remote=True)
-        print(_ipv4)
+        __ipv4 = dns_query_ex('sg.a.cloudss.win', force_remote=True)
+        print(__ipv4)

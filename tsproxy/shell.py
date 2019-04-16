@@ -37,9 +37,9 @@ def args_parse(args=None):
                             "ie. proxy foreign ip/domain-name and CN's connect directly. \n"
                             "this is default mode.")
     group.add_argument('--no-proxy', '-n', action='store_const', dest='smart_mode', const=0,
-                       help="no proxy, all request connect direct \n"
-                            "if run in this mode, socks5_hostname is required \n"
-                            " and format is 'passord/method@hostname:port'.")
+                       help="no proxy, all request connect direct.")
+                            # "if run in this mode, socks5_hostname is required \n"
+                            # " and format is 'passord/method@hostname:port'.")
     parser.add_argument('--http-port', '-p', dest='http_port', type=int, default=8080,
                         help="http(s) proxy listening port.\ndefault is 8080.")
     parser.add_argument('--http-address', dest='http_address', default='0.0.0.0',

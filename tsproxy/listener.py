@@ -50,24 +50,17 @@ class Listener:
         })
 
     def acl_op(self, ipv4='10.0.0.*', delete=False):
-        star_count = ipv4.count('*')
-        if 0 <= star_count <= 4:
-            _ipv4 = ipv4.replace('*', '0')
-            if not topendns.is_ipv4(_ipv4):
-                logger.warning("%s is NOT ipv4", ipv4)
-                return
-            num_ip = 256 ** star_count
-            starting_ip = int.from_bytes(socket.inet_aton(_ipv4), byteorder='big')
-            imask = 0xffffffff ^ (num_ip-1)
-            if not delete:
-                self._acl.add((starting_ip, imask))
-            else:
-                try:
-                    self._acl.remove((starting_ip, imask))
-                except KeyError:
-                    return False
-            return True
-        return False
+        starting_ip, imask = topendns.subnet_to_ipmask(ipv4)
+        if starting_ip is None or imask is None:
+            return False
+        if not delete:
+            self._acl.add((starting_ip, imask))
+        else:
+            try:
+                self._acl.remove((starting_ip, imask))
+            except KeyError:
+                return False
+        return True
 
 
 class HttpListener(Listener):

@@ -292,6 +292,12 @@ class RouterableConnector(SmartConnector):
         router:
             - match_con1: jp.a
             - match_con2: jp.a
+            - match_con2:
+                to: jp.a
+                with_in: 10.10.0.0/16
+                with_out:
+                    - 192.168.0.*
+                    - 192.168.1.*
     """
 
     def __init__(self, proxy_holder=None, smart_mode=1, loop=None, router_conf='router.yaml', **kwargs):
@@ -392,6 +398,27 @@ class RouterableConnector(SmartConnector):
                 if _con not in conf:
                     logger.warning('condition: %s NOT found', _con)
                     ok = False
+                # to support with_in/with_out verb 2019.4.16
+                if isinstance(_to, dict):
+                    if 'with_in' in _to:
+                        _with = _to['with_in']
+                        if isinstance(_with, list):
+                            _with = []
+                            for _w in _to['with_in']:
+                                _with.append(topendns.subnet_to_ipmask(_w))
+                            _to['with_in'] = _with
+                        else:
+                            _to['with_in'] = topendns.subnet_to_ipmask(_with)
+                    if 'with_out' in _to:
+                        _with = _to['with_out']
+                        if isinstance(_with, list):
+                            _with = []
+                            for _w in _to['with_out']:
+                                _with.append(topendns.subnet_to_ipmask(_w))
+                            _to['with_out'] = _with
+                        else:
+                            _to['with_out'] = topendns.subnet_to_ipmask(_with)
+                    _to = _to['to']
                 p, i = self.proxy_holder.find_proxy(_to)
                 if p is None and _to not in ('D', 'P', 'F'):
                     logger.warning('condition(%s) to proxy: %s NOT found', _con, _to)
@@ -405,6 +432,25 @@ class RouterableConnector(SmartConnector):
                 _to = _r[_con_name]
                 if _con_name not in self.yaml_conf:
                     continue
+                # to support with_in/with_out verb 2019.4.16
+                if isinstance(_to, dict):
+                    if 'with_in' in _to and self.proxy_holder.local_ip:
+                        _with = _to['with_in']
+                        if isinstance(_with, list):
+                            is_in = topendns.is_subnet(self.proxy_holder.local_ip, _with)
+                        else:
+                            is_in = topendns.is_subnet(self.proxy_holder.local_ip, [_with])
+                        if not is_in:
+                            continue
+                    elif 'with_out' in _to and self.proxy_holder.local_ip:
+                        _with = _to['with_out']
+                        if isinstance(_with, list):
+                            is_in = topendns.is_subnet(self.proxy_holder.local_ip, _with)
+                        else:
+                            is_in = topendns.is_subnet(self.proxy_holder.local_ip, [_with])
+                        if is_in:
+                            continue
+                    _to = _to['to']
                 pause_key = _con_name + '.pause'
                 if pause_key in self.yaml_conf:
                     if (time.time() - self.yaml_conf[pause_key]) <= 5*60:
