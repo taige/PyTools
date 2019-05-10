@@ -647,6 +647,7 @@ async def save_to_file(resp, status_fd, status, index, fd, read_timeout, _s_time
                 #     _log(logging.DEBUG, "going to read %d", _buf_len)
                 chunk = await resp.content.read(_buf_len)
             if not chunk:
+                _log(5, 'chunk is False')
                 break
             _read_len = len(chunk)
             fd.write(chunk)
@@ -953,6 +954,8 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
                     else:
                         done = True
                         break
+                else:
+                    raise IOError('save_to_file(#%d) interrupted' % index)
             except (IOError, errors.ClientError, asyncio.TimeoutError) as ioe:
                 _log(logging.WARNING, 'IOError: %s(%s)', ioe.__class__.__name__, ioe)
                 io_error = ioe
@@ -1028,7 +1031,7 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
             url=url,
             out_file=out_file,
             method=method,
-            n=n,
+            n=min(50, n),
             read_timeout=read_timeout,
             conn_timeout=conn_timeout,
             loop=loop,
