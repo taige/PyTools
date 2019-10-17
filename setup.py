@@ -1,10 +1,12 @@
 from distutils.core import setup
 
-install_requires = ['uvloop', 'requests', 'async_timeout', 'aiohttp>=2.0', 'pyyaml', 'psutil', 'shadowsocks', 'dnspython3']
+from tsproxy.version import version
+
+install_requires = ['uvloop', 'requests', 'async_timeout', 'aiohttp>=2.0', 'pyyaml', 'psutil', 'shadowsocks>=3.0', 'dnspython3']
 
 setup(
     name='PyTools',
-    version='1.0',
+    version=version,
     packages=['tsproxy', 'pyclda', 'simcity'],
     url='',
     license='Apache-2.0',

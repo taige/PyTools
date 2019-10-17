@@ -28,8 +28,9 @@ from tsproxy.common import MyThreadPoolExecutor, Timeout
 from tsproxy.common import fmt_human_bytes as _fmt_human_bytes
 from tsproxy.common import fmt_human_time as _fmt_human_time
 
+from tsproxy.version import version
 
-version = "1.0.191016.1"
+__version__ = version
 
 __all__ = ['aio_download', 'aio_download_path']
 
@@ -1656,7 +1657,7 @@ def args_parse(*args):
 
 
 def main():
-    print('pyclda version: %s' % version)
+    print('pyclda version: %s' % __version__)
     _kwargs, _headers, _verbose, _use_curses = args_parse()
     _loop = uvloop.new_event_loop()
     asyncio.set_event_loop(_loop)
