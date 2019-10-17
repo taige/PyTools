@@ -23,7 +23,7 @@ TEST_URLS = [
     'http://www.tumblr.com/',
     'http://www.google.com/',
     'http://www.youtube.com/',
-    'http://d.dropbox.com/',
+    # 'http://d.dropbox.com/',
     'http://plus.google.com/'
 ]
 
@@ -42,7 +42,7 @@ def get_wan_ip():
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache',
             'Accept-Language': 'zh-CN,zh;q=0.8'
-        }, timeout=common.default_timeout)
+        }, timeout=common.default_timeout, proxies={'no_proxy': 'members.3322.org'})
         if 200 <= res.status_code < 400:
             wan_ip = res.text.rstrip()
             if is_ipv4(wan_ip):
@@ -363,10 +363,40 @@ class ProxyHolder(object):
             logger.info("test_proxies done: %s", network_is_ok)
         return network_is_ok
 
-    def try_speedup_proxy(self, target_host) -> (Proxy, str):
+    def _parent_name(self, hostname):
+        idx = hostname.find('.')
+        if idx > 0:
+            hostname = hostname[idx+1:]
+        return hostname
+
+    def _get_speed_domain(self, target_host: str, do_mapping=True):
         if target_host in self.domain_speed_map and target_host in common.speed_domains:
-            for name_ip in sorted(self.domain_speed_map[target_host], key=lambda n: self.domain_speed_map[target_host][n], reverse=True):
-                _speed = fmt_human_bytes(self.domain_speed_map[target_host][name_ip])
+            return target_host
+        _target_host = target_host
+        while True:
+            for d in self.domain_speed_map:
+                if d.endswith(target_host):
+                    return d
+            if target_host.count('.') > 1:
+                target_host = self._parent_name(target_host)
+            else:
+                break
+        if not do_mapping:
+            return None
+        target_host = _target_host
+        while target_host.count('.') >= 1:
+            if target_host in common.speed_domain_mapping:
+                target_host = common.speed_domain_mapping[target_host]
+                return self._get_speed_domain(target_host, False)
+            target_host = self._parent_name(target_host)
+        return None
+
+    def try_speedup_proxy(self, target_host) -> (Proxy, str):
+        _speed_host = self._get_speed_domain(target_host)
+        # if target_host in self.domain_speed_map and target_host in common.speed_domains:
+        if _speed_host is not None:
+            for name_ip in sorted(self.domain_speed_map[_speed_host], key=lambda n: self.domain_speed_map[_speed_host][n], reverse=True):
+                _speed = fmt_human_bytes(self.domain_speed_map[_speed_host][name_ip])
                 _name, ip = name_ip.split('/')
                 _p, _ = self.find_proxy(_name)
                 if _p is not None:

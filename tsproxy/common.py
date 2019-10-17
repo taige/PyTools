@@ -11,7 +11,7 @@ import time
 import traceback
 import errno
 from io import StringIO
-from configparser import ConfigParser
+from configparser import RawConfigParser
 from urllib.parse import urlparse
 
 from async_timeout import timeout
@@ -26,7 +26,7 @@ KEY_IP_CHANGED = 'KEY_ip_changed'
 
 Timeout = timeout
 
-apnic_latest_url = 'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
+apnic_latest_url = 'https://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
 apnic_expired_days = 30
 
 # default timeout seconds for read and connect
@@ -68,6 +68,7 @@ speed_average_threshold = 100
 speed_index_url = 'https://www.tumblr.com/'
 speed_urls = ['https://ve.media.tumblr.com/tumblr_pfwg4l558b1sq04bj_480.mp4', 'https://vtt.tumblr.com/tumblr_pf98cpiaq61x9cgqk.mp4', 'https://vt.media.tumblr.com/tumblr_olmzaj26fj1qlmvfe_480.mp4']
 speed_domains = set()
+speed_domain_mapping = {}
 
 speed_hosts = set()
 speed_black_hosts = set()
@@ -119,8 +120,10 @@ def load_tsproxy_conf(conf_file):
     global speed_index_url
     global speed_urls
     global speed_domains
+    global speed_domain_mapping
 
-    config = ConfigParser(allow_no_value=True, delimiters=('='))
+    config = RawConfigParser(allow_no_value=True, delimiters=('='))
+    config.optionxform = lambda option: option
     config.read(conf_file)
 
     def _common_conf_get(func, key, default, section="common", remove=False):
@@ -175,12 +178,20 @@ def load_tsproxy_conf(conf_file):
         speed_average_threshold = _common_conf_get(config.getint, "speed_average_threshold", speed_average_threshold, section="speed_test", remove=True)
         speed_index_url = _common_conf_get(config.get, "speed_index_url", speed_index_url, section="speed_test", remove=True)
         _speed_urls = []
+        _speed_domain_map = {}
         for (k, v) in config.items("speed_test"):
             if k.startswith("http"):
+                if v is not None:
+                    k = '%s=%s' % (k, v)
                 _speed_urls.append(k)
+            elif v is not None:
+                _speed_domain_map[k] = v
         if len(_speed_urls) > 0:
             speed_urls.clear()
             speed_urls.extend(_speed_urls)
+        if len(_speed_domain_map) > 0:
+            speed_domain_mapping.clear()
+            speed_domain_mapping.update(_speed_domain_map)
     speed_domains.clear()
     for url in speed_urls:
         domain = urlparse(url).netloc

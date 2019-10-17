@@ -137,7 +137,7 @@ async def update_apnic_latest(raise_on_fail=False, loop=None):
     if not is_exist or (time.time() - os.stat(apnic_file).st_mtime) >= expired_time:
         # not found or expired
         tmp_filename = apnic_file + '.downloading'
-        done, new_file = await pyclda.aio_download(session=None, url=common.apnic_latest_url, out_file=tmp_filename, method='GET', loop=loop)
+        done, new_file, _ = await pyclda.aio_download(common.apnic_latest_url, out_file=tmp_filename, loop=loop)
         if done:
             if is_exist:
                 # backup old file

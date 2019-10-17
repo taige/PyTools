@@ -14,8 +14,10 @@ import signal
 import sys
 import time
 import platform
+import json
 from concurrent.futures import CancelledError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus as quote
+from pprint import pformat
 
 import aiohttp
 import uvloop
@@ -26,7 +28,10 @@ from tsproxy.common import MyThreadPoolExecutor, Timeout
 from tsproxy.common import fmt_human_bytes as _fmt_human_bytes
 from tsproxy.common import fmt_human_time as _fmt_human_time
 
-__all__ = ['aio_download']
+
+version = "1.0.191016.1"
+
+__all__ = ['aio_download', 'aio_download_path']
 
 logger = logging.getLogger(__name__)
 
@@ -609,7 +614,7 @@ def init_download_task(futures, status_fd, status, con_len, n, status_file, loop
         if status['con_len'] is None:
             status['con_len'] = int(con_len)
         if status['break_cont']:
-            n = min(int(status['con_len'] / 10240), n)
+            n = max(1, min(int(status['con_len'] / 10240), n))
             if status_fd is None:
                 status_fd = open(status_file, 'w+b')
                 init_status(status_fd, status, n)
@@ -718,6 +723,9 @@ def get_filenames(url, out_file):
         out_file = os.path.basename(o_url.path)
     else:
         out_file = out_file.strip()
+        dirs = os.path.dirname(out_file)
+        if dirs and not os.path.isdir(dirs):
+            os.makedirs(dirs, exist_ok=True)
 
     _out_file = out_file
     for i in range(0, 200):
@@ -727,7 +735,11 @@ def get_filenames(url, out_file):
                 pass
             break
         elif not os.path.isfile(status_file):
-            out_file = '%s.%d' % (_out_file, i)
+            _t_suf = _out_file.rsplit('.', maxsplit=1)
+            if len(_t_suf) > 1:
+                out_file = '%s(%d).%s' % (_t_suf[0], i, _t_suf[1])
+            else:
+                out_file = '%s(%d)' % (_out_file, i)
         elif i >= 100:
             raise Exception('too many same filename[%s] files' % _out_file)
         else:
@@ -738,6 +750,7 @@ def get_filenames(url, out_file):
 async def await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop=None):
     global md5_executor
 
+    cancelled = None
     if loop is None:
         loop = asyncio.get_event_loop()
     if len(futures) > 0:
@@ -748,26 +761,36 @@ async def await_status(done, status, futures, url, out_file, method, _out_file, 
                     done = False
                     break
                 for f in _done:
-                    _d, _ = f.result()
+                    if f.cancelled():
+                        done = False
+                        if cancelled is None:
+                            cancelled = CancelledError()
+                        break
+                    _d, _, _c = f.result()
+                    if _c is not None and cancelled is None:
+                        cancelled = _c
                     if not _d:
                         done = False
                         break
                 break
-            except CancelledError:
+            except CancelledError as ce:
+                cancelled = ce
                 continue
-    if not done or (status['con_len'] is not None and status['con_len'] != status['con_down']):
+    if (status['con_len'] is None and not done) or (status['con_len'] is not None and status['con_len'] != status['con_down']):
         done = False
-        logger.warning('=======')
+        logger.warning('====FAIL====')
         logger.warning('%s %s FAIL', method, url)
         for k in sorted(status, key=lambda sk: 'z' + str(sk) if isinstance(sk, int) else sk):
             if isinstance(k, str) and not k.startswith('_'):
                 logger.warning('%-10s: %s', k, status[k])
         status.log(inactive=False)
+        logger.warning('========')
     else:
+        done = True
         if os.path.isfile(_status_file):
             os.remove(_status_file)
         speed = (status['con_down'] - status['start_down']) / (time.time() - start)
-        logger.warning('==========================')
+        logger.warning('=============SUCCESS=============')
         logger.warning('%s %s DONE used [%s], speed [%sB/S]', method, url, fmt_human_time(time.time() - start), fmt_human_bytes(speed))
         filename = status['filename']
         if filename is not None and out_file is None and filename != _out_file and not os.path.exists(filename):
@@ -790,7 +813,7 @@ async def await_status(done, status, futures, url, out_file, method, _out_file, 
             else:
                 logger.warning('congratulations! md5 is same!')
         logger.warning('==========================')
-    return done
+    return done, cancelled
 
 
 def load_last_status(status_fd, status, n, _out_file, url):
@@ -817,20 +840,21 @@ def load_last_status(status_fd, status, n, _out_file, url):
     return n
 
 
-async def aio_download(session, url, out_file, method, n=0, index=0, read_timeout=58, conn_timeout=5, status=None, loop=None, **kwargs):
+async def aio_download(url, method='GET', out_file=None, n=0, index=0, read_timeout=58, conn_timeout=5, status=None, restart_on_done=True, retry_count=10, retry_interval=2, session=None, loop=None, **kwargs):
     if session is None:
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True), conn_timeout=conn_timeout, loop=loop) as session:
-            return await aio_download(session, url, out_file, method, n=n, index=index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True, force_close=True), conn_timeout=conn_timeout, loop=loop) as session:
+            return await aio_download(url, method=method, out_file=out_file, n=n, index=index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status,
+                                      restart_on_done=restart_on_done, retry_count=retry_count, retry_interval=retry_interval, session=session, loop=loop, **kwargs)
 
     if loop is None:
         loop = asyncio.get_event_loop()
 
     start = time.time()
     if 'headers' in kwargs:
-        headers = kwargs['headers']
+        headers = kwargs['headers'].copy()
     else:
         headers = {}
-        kwargs['headers'] = headers
+    kwargs['headers'] = headers
     kwargs.setdefault('timeout', None)
 
     futures = []
@@ -856,6 +880,7 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
 
     _log = __log
 
+    cancelled_err = None
     status.active_n += 1
     try:
         fd = open(_out_file, 'r+b')
@@ -872,14 +897,17 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
         io_retry = 0
         http_code = 200
         io_error = None
-        while io_retry < 10:
+        while True:
             if not status[index].active:
                 status[index].active = True
                 _log(logging.INFO, '%s activated', status[index])
 
             if io_error is not None or http_code < 200 or http_code >= 300:
                 io_retry += 1
-                await asyncio.sleep(2, loop=loop)
+                if io_retry < retry_count:
+                    await asyncio.sleep(retry_interval * io_retry, loop=loop)
+                else:
+                    break
 
             def __log(level, msg, *log_args, exc_info=False, **log_kwargs):
                 if not logger.isEnabledFor(level):
@@ -893,7 +921,7 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
 
             _done = prepare_http_headers(headers, status, index, _log)
             if _done:
-                if find_task(status_fd, status, index, n, _log):
+                if restart_on_done and find_task(status_fd, status, index, n, _log):
                     continue
                 else:
                     done = True
@@ -935,7 +963,9 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
                 if index == 0 and len(futures) == 0:
 
                     async def _aio_download_task(_n, _index):
-                        return await aio_download(session, url, _out_file, method, n=_n, index=_index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status, loop=loop, **kwargs)
+                        await asyncio.sleep(_index)
+                        return await aio_download(url, method=method, out_file=_out_file, n=_n, index=_index, read_timeout=read_timeout, conn_timeout=conn_timeout, status=status,
+                                                  restart_on_done=restart_on_done, retry_count=retry_count, retry_interval=retry_interval, session=session, loop=loop, **kwargs)
 
                     _status_fd = status_fd
                     status_fd = init_download_task(futures, status_fd, status, con_len, n, _status_file, loop, _aio_download_task)
@@ -949,7 +979,7 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
 
                 if status['con_len'] is None or status[index].is_done():
                     _log(logging.INFO, 'DONE with (%d/%s)', status[index].start0, status[index].end)
-                    if find_task(status_fd, status, index, n, _log):
+                    if restart_on_done and find_task(status_fd, status, index, n, _log):
                         continue
                     else:
                         done = True
@@ -964,8 +994,8 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
             finally:
                 if resp is not None:
                     resp.close()
-    except CancelledError:
-        pass
+    except CancelledError as ex:
+        cancelled_err = ex
     except BaseException as ex:
         _log(logging.ERROR, 'Error: %s(%s)', ex.__class__.__name__, ex, exc_info=True)
     finally:
@@ -983,8 +1013,10 @@ async def aio_download(session, url, out_file, method, n=0, index=0, read_timeou
     else:
         del status[index]
     if index == 0:
-        done = await await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop)
-    return done, _out_file
+        done, cancelled = await await_status(done, status, futures, url, out_file, method, _out_file, _status_file, start, loop)
+        if cancelled is not None and cancelled_err is None:
+            cancelled_err = cancelled
+    return done, _out_file, cancelled_err
 
 
 def MD5(filename, block_size=10240):
@@ -1002,9 +1034,397 @@ def MD5(filename, block_size=10240):
     return md5.hexdigest()
 
 
-def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=None, http_proxy=None, n=0, read_timeout=58, conn_timeout=5, conc=False, loop=None, **kwargs):
+async def aio_request_with_retry(url, loop, header=False, read_timeout=58, conn_timeout=5, retry_count=10, retry_interval=2, **kwargs):
+    io_retry = 0
+    method = 'HEAD' if header else 'GET'
+    while True:
+        logger.log(6, '%sing.#%d %s', method, io_retry, url)
+
+        try:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=50, enable_cleanup_closed=True, force_close=True), conn_timeout=conn_timeout, raise_for_status=True,
+                                             loop=loop) as session:
+                with Timeout(conn_timeout + 1, loop=loop):
+                    resp = await session.request(method=method, url=url, **kwargs)
+                    if header:
+                        logger.log(6, '%s headers: %s', url[:50], resp.headers)
+                        return resp.headers
+
+                with Timeout(read_timeout, loop=loop):
+                    j = await resp.json(content_type='')
+
+                return j
+        except (asyncio.TimeoutError, aiohttp.ClientResponseError) as err:
+            logger.warning('%sing.#%d %s\n\terror: %s', method, io_retry, url, err)
+            if isinstance(err, aiohttp.ClientResponseError):
+                if 400 <= err.code < 500:
+                    break
+            io_retry += 1
+            if io_retry < retry_count:
+                await asyncio.sleep(retry_interval * io_retry, loop=loop)
+            else:
+                break
+    return None
+
+
+def _get_baidu_url_params(url: str, conf_filename='pyclda.baidu.url.params.json') -> (str, dict):
+    """
+    从json配置文件中读取baidu访问的url的和参数
+    json文件格式格式：
+        {
+            "headers": {
+                "params": {
+                    "<key1>": "<value1>",
+                    "<key2>": "<value2>",
+                    ...
+                }
+            }
+            "<URL-1>": {
+                "url": "<alternative_url>",
+                "params": {
+                    "devuid": "<alternative_devuid>",
+                    ...
+                }
+            },
+            "<URL-2>": {
+                "url": ...,
+                "params": ...
+            }
+        }
+      <URL-*> 可能是
+        1. https://pan.baidu.com/api/list （list目录的URL）
+        2. https://d.pcs.baidu.com/rest/2.0/pcs/file （获取文件下载location的URL）
+    :param url:
+    :param conf_filename:
+    :return:
+    """
+    if os.sep not in conf_filename:
+        filename = os.path.expanduser('~/%s' % conf_filename)
+    else:
+        filename = conf_filename
+    try:
+        with open(filename, 'r') as f:
+            j = json.load(f)
+        if url in j:
+            conf = j[url]
+            if 'url' in conf:
+                url = conf['url']
+            if 'params' in conf:
+                return url, conf['params']
+    except Exception as e:
+        logger.warning('load %s fail: %s', filename, e)
+    return url, {}
+
+
+async def path_list(path, loop, **kwargs):
+    buffer_file = '.%s.file_list_buffering' % path.replace('/', '__')
+    expired_time = 24 * 3600
+    if os.path.isfile(buffer_file) and (time.time() - os.stat(buffer_file).st_mtime) < expired_time:
+        with open(buffer_file, 'r') as f:
+            buf_j = json.load(f)
+        file_list = buf_j['file_list']
+        failed_list_dirs = buf_j['failed_list_dirs']
+        if len(failed_list_dirs) == 0:
+            logger.debug('reuse buffering list')
+            return file_list, failed_list_dirs
+    else:
+        file_list = []
+        failed_list_dirs = []
+
+    path_list_url_params = {
+        'devuid': '',
+        'channel': 'MAC_%s_MacBookPro15,1_netdisk_1099a' % get_mac_ver(),
+        'cuid': '',
+        'time': '%d' % time.time(),
+        'clienttype': '21',
+        'rand': '',
+        'logid': '',
+        'version': '2.1.0',
+        'vip': '0',
+        'limit': '1001',
+        'order': 'time',
+        'folder': '0',
+        'desc': '1',
+        'start': '0',
+    }
+    path_list_url = 'https://pan.baidu.com/api/list'
+
+    path_list_url, params_from_confile = _get_baidu_url_params(path_list_url)
+    for idx, k in enumerate(path_list_url_params):
+        v = params_from_confile.get(k, path_list_url_params[k])
+        path_list_url += ('?' if idx == 0 else '&') + '%s=%s' % (k, quote(v))
+
+    concurrent = {'a': 1}
+    _failed_list_dirs = []
+
+    async def _request_file_list(_dir, search_depth=None, depth=1):
+        _url = '%s&dir=%s' % (path_list_url, quote(_dir))
+
+        logger.debug('listing dir(%d): %s', concurrent['a'], _dir)
+        j = await aio_request_with_retry(_url, loop, **kwargs)
+        concurrent['a'] -= 1
+
+        if j is None or 'list' not in j:
+            _failed_list_dirs.append(_dir)
+            logger.warning('list dir %s FAILED: %s', _dir, pformat(j))
+        elif len(j['list']) > 0:
+            j['list'].sort(key=lambda _p: _p['isdir'], reverse=True)
+            for _path in j['list']:
+                logger.debug('%s%s%s', '\t'*depth, _path['path'], '/' if _path['isdir'] else '')
+            while len(j['list']) > 0:
+                futures = []
+                while len(j['list']) > 0:
+                    _path = j['list'].pop(0)
+                    logger.log(4, 'list: %s', pformat(_path))
+                    if _path['isdir']:
+                        if search_depth is not None and depth+1 > search_depth:
+                            continue
+                        futures.append(_request_file_list(_path['path'], search_depth=search_depth, depth=depth+1))
+                        concurrent['a'] += 1
+                        if concurrent['a'] >= 10:
+                            break
+                    else:
+                        file_list.append(_path)
+                if len(futures) > 0:
+                    await asyncio.gather(*futures, loop=loop)
+        logger.debug('list dir(%d) DONE: %s', concurrent['a'], _dir)
+
+    if len(failed_list_dirs) == 0:
+        await _request_file_list(path)
+        if len(file_list) == 0 and len(_failed_list_dirs) == 0 and not path.endswith('/'):
+            parent_path = os.path.dirname(path)
+            await _request_file_list(parent_path, search_depth=1)
+            if len(file_list) > 0:
+                _found = False
+                for _f in file_list:
+                    if _f['path'] == path:
+                        file_list = [_f]
+                        _found = True
+                        break
+                if not _found:
+                    return [], _failed_list_dirs
+    else:
+        for f_dir in failed_list_dirs:
+            await _request_file_list(f_dir)
+
+    if len(file_list) == 0 and len(_failed_list_dirs) == 0:
+        return file_list, _failed_list_dirs
+
+    file_list.sort(key=lambda _f: _f['path'])
+
+    try:
+        with open(buffer_file + '.ing', 'w') as pf:
+            json.dump({
+                'file_list': file_list,
+                'failed_list_dirs': _failed_list_dirs
+            }, pf, indent=2)
+        os.rename(buffer_file + '.ing', buffer_file)
+    except:
+        pass
+
+    return file_list, _failed_list_dirs
+
+
+async def path_file_location(path, loop, **kwargs):
+    file_loc_url_params = {
+        'devuid': '',
+        'channel': 'MAC_%s_MacBookPro15,1_netdisk_1099a' % get_mac_ver(),
+        'cuid': '',
+        'time': '',
+        'clienttype': '21',
+        'rand': '',
+        'logid': '',
+        'version': '2.1.0',
+        'vip': '0',
+        'app_id': '',
+        'err_ver': '1.0',
+        'ehps': '1',
+        'dtype': '1',
+        'ver': '4.0',
+        'dp-logid': '',
+        'check_blue': '1',
+        'esl': '1',
+        'method': 'locatedownload',
+    }
+    file_loc_url = 'https://d.pcs.baidu.com/rest/2.0/pcs/file'
+
+    file_loc_url, params_from_confile = _get_baidu_url_params(file_loc_url)
+    for idx, k in enumerate(file_loc_url_params):
+        v = params_from_confile.get(k, file_loc_url_params[k])
+        file_loc_url += ('?' if idx == 0 else '&') + '%s=%s' % (k, quote(v))
+
+    _url = '%s&path=%s' % (file_loc_url, quote(path))
+
+    logger.debug("%s going to request location", path)
+    j = await aio_request_with_retry(_url, loop, **kwargs)
+    return j['urls'] if j is not None and 'urls' in j else None
+
+
+def _print_downloader_status(downloader_status):
+    for idx in downloader_status:
+        status = downloader_status[idx]
+        if isinstance(status, Status):
+            logger.warning('downloader.#%d downloading [ETA %s %sB/S %d%%] %s', idx, _fmt_human_time(status.eta()), _fmt_human_bytes(status.down_speed()), status.done_percent(), status['filename'])
+        else:
+            logger.warning('downloader.#%d %s', idx, status)
+
+
+async def aio_download_path(path, method='GET', n=0, path_concur=1, print_status=10, magic_param='method=download', loop=None, **kwargs):
+    """
+        aio方式从Baidu Yun下载云端的一个目录
+    """
+    global md5_executor
+
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
+    file_list, failed_list_dirs = await path_list(path, loop, **kwargs)
+    file_count = len(file_list)
+
+    base_dir = os.path.dirname(path if not path.endswith('/') else path[:len(path) - 1])
+    if not base_dir.startswith('/'):
+        base_dir = '/' + base_dir
+
+    if md5_executor is None:
+        md5_executor = MyThreadPoolExecutor(max_workers=os.cpu_count(), pool_name='md5-helper')
+
+    failed_location_files = []
+    downloader_status = {_idx: 'INITIAL' for _idx in range(min(path_concur, file_count))}
+
+    async def _downloader(_idx, _file_info, **_kwargs):
+        downloader_status[_idx] = 'READY for download task...'
+
+        server_file_path = _file_info['path']
+        downloader_status[_idx] = 'processing %s' % server_file_path
+        logger.debug("_downloader.#%d processing %s", _idx, server_file_path)
+        server_size = _file_info['size']
+        server_md5 = _file_info['md5']
+        local_file_path = os.path.relpath(server_file_path, base_dir)
+
+        same_size_but_diff_md5 = False
+        if os.path.isfile(local_file_path):
+            local_size = os.stat(local_file_path).st_size
+            if local_size == server_size:
+                downloader_status[_idx] = 'calculating md5 of %s' % local_file_path
+                local_md5 = await loop.run_in_executor(md5_executor, MD5, local_file_path)
+                if local_md5.lower() == server_md5.lower():
+                    logger.info('%s (%s/%d) has DOWNLOADED to %s' % (server_file_path, server_md5, server_size, local_file_path))
+                    return None
+                else:
+                    same_size_but_diff_md5 = True
+                    logger.info('%s & %s have SAME SIZE but DIFF MD5(%d/%s:%s)' % (server_file_path, local_file_path, server_size, server_md5, local_md5))
+            else:
+                logger.info('%s(%d) maybe partial downloaded at %s(%d)' % (server_file_path, server_size, local_file_path, local_size))
+
+        downloader_status[_idx] = 'requesting location of %s' % server_file_path
+        urls = await path_file_location(server_file_path, loop, **_kwargs)
+        if urls is None or len(urls) == 0 or 'url' not in urls[0] or not urls[0]['url']:
+            failed_location_files.append(server_file_path)
+            logger.warning('%s location request FAILED: %s', server_file_path, pformat(urls))
+            return None
+
+        logger.debug('%s locations: %s', server_file_path, pformat(urls))
+        _cancelled = None
+        retry_count = _kwargs.get('retry_count', 10)
+        for url_idx, j_url in enumerate(urls):
+            if 'url' not in j_url:
+                continue
+            url = j_url['url']
+            if magic_param not in url:
+                url += '&%s' % magic_param.lower()
+            _kwargs['retry_count'] = max(0, retry_count - url_idx - 1)
+            if same_size_but_diff_md5:
+                downloader_status[_idx] = 're-requesting server-side md5 of %s' % server_file_path
+                headers = await aio_request_with_retry(url, loop, header=True, **_kwargs)
+                server_md5 = headers.get(hdrs.CONTENT_MD5)
+                if server_md5 and local_md5.lower() == server_md5.lower():
+                    logger.warning('%s & %s have SAME SIZE AND MD5(%d/%s)' % (server_file_path, local_file_path, server_size, server_md5))
+                    return None
+                else:
+                    logger.warning('%s & %s have SAME SIZE but DIFF MD5(%d/%s:%s) RE-Download' % (server_file_path, local_file_path, server_size, server_md5, local_md5))
+
+            logger.debug('_downloader.#%d Downloading %s ...', _idx, server_file_path)
+            _status = Status()
+            downloader_status[_idx] = _status
+            _done, _out_file, _cancelled = await aio_download(url, method=method, out_file=local_file_path, n=n, status=_status, loop=loop, **_kwargs)
+            if not _done and _cancelled is None:
+                logger.warning('downloader.#%d %s download FAILED, maybe let\'s try next url', _idx, server_file_path)
+                continue
+            if _done:
+                logger.warning('downloader.#%d %s download SUCCESS, saved to %s', _idx, server_file_path, _out_file)
+            else:
+                logger.warning('downloader.#%d %s download CANCELLED, check the log for detail', _idx, server_file_path)
+            break
+
+        return _cancelled
+
+    async def _downloader_wrap(_idx, _file_path):
+        try:
+            _cancelled = await _downloader(_idx, _file_path, **kwargs)
+        except CancelledError as _ce:
+            _cancelled = _ce
+        _stat = 'DONE' if _cancelled is None else 'CANCELLED'
+        downloader_status[_idx] = _stat
+        return _cancelled
+
+    d_futures = []
+
+    cancelled = None
+    time_out = time.time() + print_status
+    while True:
+        try:
+            for idx in downloader_status:
+                if not cancelled and len(file_list) > 0 and downloader_status[idx] in ('INITIAL', 'DONE'):
+                    d_futures.append(asyncio.ensure_future(_downloader_wrap(idx, file_list.pop(0))))
+
+            if len(d_futures) == 0:
+                break
+
+            results, pending = await asyncio.wait(d_futures, timeout=max(0, time_out - time.time()), return_when=asyncio.FIRST_COMPLETED, loop=loop)
+            if len(results) > 0:
+                for result in results:
+                    _cncl = result.result()
+                    if _cncl is not None:
+                        cancelled = _cncl
+                        break
+                d_futures.clear()
+                d_futures.extend(pending)
+            else:
+                time_out = time.time() + print_status
+                raise asyncio.TimeoutError()
+        except asyncio.TimeoutError:
+            logger.warning('=====DOWNLOADER STATUS=====')
+            _print_downloader_status(downloader_status)
+            if len(file_list) > 0:
+                _tmp = ''
+                for i in range(min(10, len(file_list))):
+                    _tmp += '\n\t%s(%s)' % (file_list[i]['path'], _fmt_human_bytes(file_list[i]['size']))
+                logger.info('files waiting process(Total: %d): %s', len(file_list), _tmp)
+        except CancelledError as ce:
+            cancelled = ce
+            continue
+
+    logger.warning('=====downloader status=====')
+    _print_downloader_status(downloader_status)
+
+    if len(failed_list_dirs) > 0:
+        logger.info('FAILED list dirs:\n\t%s', failed_list_dirs)
+    if len(failed_location_files) > 0:
+        logger.info('FAILED location files:\n\t%s', failed_location_files)
+
+    return None, None, cancelled
+
+
+def main_entry(*headers, urls: list, baidu=False, user_agent=None, http_proxy=None, n=0, conc=False, loop=None, **kwargs):
     dict_headers = {}
-    if user_agent:
+    if baidu:
+        dict_headers['X-Download-From'] = 'baiduyun'
+        if user_agent is None:
+            dict_headers['User-Agent'] = 'netdisk;2.1.0;pc;pc-mac;%s;macbaiduyunguanjia' % get_mac_ver()
+        _, _headers = _get_baidu_url_params('headers')
+        dict_headers.update(_headers)
+    elif user_agent is None:
+        dict_headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36'
+    else:
         dict_headers['User-Agent'] = user_agent.strip()
     for h in headers:
         if ':' in h:
@@ -1018,7 +1438,9 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    async def _d(url, post_data=None, **kw_args):
+    async def _d(url, post_data=None, aio_download_func=None, **kw_args):
+        if aio_download_func is None:
+            aio_download_func = aio_download
         data = None
         if post_data is not None:
             data = formdata.FormData()
@@ -1026,14 +1448,9 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
                 _kv = _data.split('=', 1)
                 if len(_kv) == 2:
                     data.add_field(_kv[0], _kv[1])
-        done, _out_file = await aio_download(
-            session=None,
-            url=url,
-            out_file=out_file,
-            method=method,
+        done, _out_file, cancelled_err = await aio_download_func(
+            url,
             n=min(50, n),
-            read_timeout=read_timeout,
-            conn_timeout=conn_timeout,
             loop=loop,
             headers=dict_headers,
             data=data,
@@ -1042,7 +1459,7 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
             **kw_args
         )
         os.system('tput -Txterm bel')
-        return done, _out_file
+        return done, _out_file, cancelled_err
 
     def term_handler(_signum):
         if _signum == signal.SIGQUIT:
@@ -1061,12 +1478,24 @@ def main_entry(*headers, urls: list, out_file=None, method='GET', user_agent=Non
         loop.add_signal_handler(signum, term_handler, signum)
 
     try:
+        kwargs_bk = kwargs.copy()
         futures = []
         for url in urls:
+            kwargs = kwargs_bk.copy()
+            if not url.lower().startswith('http://') and not url.lower().startswith('https://'):
+                kwargs['aio_download_func'] = aio_download_path
+                kwargs.pop('out_file', None)
+                kwargs.pop('restart_on_done', None)
+            else:
+                kwargs.pop('path_concur', None)
+                kwargs.pop('print_status', None)
+                kwargs.pop('magic_param', None)
             if conc:
                 futures.append(_d(url, **kwargs))
             else:
-                loop.run_until_complete(_d(url, **kwargs))
+                _, _, cancelled = loop.run_until_complete(_d(url, **kwargs))
+                if cancelled is not None:
+                    break
         if len(futures) > 0:
             loop.run_until_complete(asyncio.gather(*futures, loop=loop))
         if platform.system() == 'Darwin':
@@ -1171,6 +1600,14 @@ def curses_entry(stdscr, log_cache, verbose, *headers, **kwargs):
             pass
 
 
+def get_mac_ver():
+    import platform
+    mac_ver = platform.mac_ver()[0]
+    if mac_ver.count('.') < 2:
+        mac_ver += '.0'
+    return mac_ver
+
+
 def args_parse(*args):
     parser = argparse.ArgumentParser(description="download accelerate",
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -1186,6 +1623,8 @@ def args_parse(*args):
                         help="set http proxy")
     parser.add_argument('-a', dest='use_curses', default=False, action='store_true',
                         help="use curses progress indicator")
+    parser.add_argument('-r', dest='restart_on_done', default=True, action='store_false',
+                        help="don't re-allocate download resource when one thread done")
     parser.add_argument('-m', dest='method', default='GET',
                         help="set http method, default is GET")
     parser.add_argument('-c', dest='conc', default=False, action='store_true',
@@ -1196,6 +1635,14 @@ def args_parse(*args):
                         help="set connect timeout, default is 5 seconds")
     parser.add_argument('--timeout', dest='read_timeout', default=58, type=int,
                         help="set read timeout, default is 58 seconds")
+    parser.add_argument('--retry_count', dest='retry_count', default=10, type=int,
+                        help="http request retry count when io errors occur(including the first request try), default is 10")
+    parser.add_argument('--path_concur', dest='path_concur', default=1, type=int,
+                        help="concurrency download files when path download, default is 1")
+    parser.add_argument('--print_status', dest='print_status', default=10, type=int,
+                        help="path downloader status printing interval, default is 10 (seconds)")
+    parser.add_argument('--magic_param', dest='magic_param', default='method=download',
+                        help="magic param add to url for accelerate concurrent connection and download speed")
     parser.add_argument('--baidu', default=False, action='store_true',
                         help="auto set baiduYun request headers")
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0)
@@ -1203,40 +1650,33 @@ def args_parse(*args):
 
     kwargs = vars(parser.parse_args(None if args is None or len(args) == 0 else args))
     headers = kwargs.pop('headers')
-    if kwargs.pop('baidu'):
-        import platform
-        mac_ver = platform.mac_ver()[0]
-        if mac_ver.count('.') < 2:
-            mac_ver += '.0'
-        headers.append('X-Download-From: baiduyun')
-        if kwargs['user_agent'] is None:
-            kwargs['user_agent'] = 'netdisk;2.1.0;pc;pc-mac;%s;macbaiduyunguanjia' % mac_ver
-    elif kwargs['user_agent'] is None:
-        kwargs['user_agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/48.0.2564.41 Safari/537.36'
     if kwargs['post_data']:
         kwargs['method'] = 'POST'
     return kwargs, headers, kwargs.pop('verbose'), kwargs.pop('use_curses')
 
 
 def main():
+    print('pyclda version: %s' % version)
     _kwargs, _headers, _verbose, _use_curses = args_parse()
-    logs = []
     _loop = uvloop.new_event_loop()
     asyncio.set_event_loop(_loop)
     _kwargs['loop'] = _loop
-    try:
-        if _use_curses:
+
+    if _use_curses:
+        logs = []
+        try:
             curses.wrapper(curses_entry, logs, _verbose, *_headers, **_kwargs)
-        else:
-            raise curses.error()
-    except curses.error:
-        logging.basicConfig(format='%(asctime)s - %(message)s',
-                            level=logging.NOTSET if _verbose > 2 else logging.DEBUG if _verbose > 1 else logging.INFO if _verbose > 0 else logging.WARNING,
-                            stream=sys.stdout)
-        main_entry(*_headers, **_kwargs)
-    finally:
-        for l in logs:
-            print(l[1])
+            return
+        except curses.error:
+            pass
+        finally:
+            for l in logs:
+                print(l[1])
+
+    logging.basicConfig(format='%(asctime)s - %(message)s',
+                        level=(9 - _verbose) if _verbose > 2 else logging.DEBUG if _verbose > 1 else logging.INFO if _verbose > 0 else logging.WARNING,
+                        stream=sys.stdout)
+    main_entry(*_headers, **_kwargs)
 
 
 if __name__ == '__main__':

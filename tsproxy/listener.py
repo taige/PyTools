@@ -4,6 +4,9 @@ import concurrent.futures
 import logging
 import socket
 import time
+import psutil
+import os
+import platform
 from io import BytesIO
 from io import StringIO
 
@@ -74,7 +77,9 @@ class HttpListener(Listener):
         self.connections = {}
         self._processes = common.FIFOCache(cache_timeout=60, lru=True)
         self._pid = psutil.Process().pid
-        self._root_access = True
+        self._root_access_deny = 0
+        self._root_access_deny_time = 0
+        self._get_connection_process_macos_count = 0
 
     def __call__(self, connection):
         try:
@@ -99,12 +104,45 @@ class HttpListener(Listener):
             proxy_name = None
         return proxy_name
 
+    def _get_connection_process_macos(self, connection):
+        import subprocess  # -sTCP:ESTABLISHED
+        p = subprocess.Popen('lsof -nP -iTCP:%d' % connection.lport, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        line_num = 0
+        pids = []
+        for line in p.stdout.readlines():
+            if isinstance(line, bytes):
+                line = line.decode().strip()
+            line_num += 1
+            logger.debug('_get_connection_process_macos(:%d) lsof output[%d]: %s', connection.lport, line_num, line)
+            if line_num == 1:
+                continue
+            tmp = line.split()
+            if len(tmp) < 2:
+                continue
+            pid = int(tmp[1])
+            pids.append(pid)
+        for pid in sorted(pids, key=lambda _pid: 0 if _pid == self._pid else _pid, reverse=True):
+            if pid in self._processes:
+                proc = self._processes[pid]
+            else:
+                proc = psutil.Process(pid)
+                self._processes[pid] = proc
+            connection['process_pid'] = proc.pid
+            connection['process_name'] = proc.name()
+            return True
+        logger.info('_get_connection_process_macos(:%d) did\'t found process', connection.lport)
+        return False
+
     def get_connection_process(self, connection):
-        import psutil
-        if not self._root_access:
+        if self._root_access_deny >= 10 and (time.time() - self._root_access_deny_time) < 60:
             return
         try:
+            if platform.system() == 'Darwin' and self._get_connection_process_macos_count > 10 and (time.time() - self._root_access_deny_time) < 60 \
+                    and self._get_connection_process_macos(connection):
+                return
             for c in psutil.net_connections(kind='tcp'):
+                self._root_access_deny = 0
+                self._get_connection_process_macos_count = 0
                 if connection.lport == c.laddr[1] and c.pid and c.pid != self._pid:
                     ip1 = int.from_bytes(socket.inet_pton(c.family, c.laddr[0]), byteorder='big')
                     ip2 = int.from_bytes(socket.inet_pton(connection.family, connection.laddr), byteorder='big')
@@ -118,7 +156,14 @@ class HttpListener(Listener):
                         connection['process_name'] = proc.name()
                         return
         except psutil.AccessDenied:
-            self._root_access = False
+            logger.warning('psutil ROOT access denied #%d(PID:%d) for :%d', self._root_access_deny, os.getpid(), connection.lport, stack_info=True)
+            if self._root_access_deny == 0:
+                self._root_access_deny_time = time.time()
+            if platform.system() == 'Darwin' and self._get_connection_process_macos(connection):
+                self._get_connection_process_macos_count += 1
+                logger.warning('psutil need\'t ROOT access (PID:%d) for :%d  %s[PID:%d]', os.getpid(), connection.lport, connection['process_name'], connection['process_pid'])
+                return
+            self._root_access_deny += 1
         except BaseException as ex:
             logger.exception("%s get_connection_process fail: %s(%s)", connection, common.clazz_fullname(ex), ex)
 
