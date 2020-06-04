@@ -1,19 +1,19 @@
-import logging
-import sys
-import tty
-import termios
-import fcntl
-import os
 import asyncio
+import fcntl
 import functools
+import logging
+import os
+import sys
+import termios
 import time
-from datetime import datetime
+import tty
 from collections import OrderedDict
+from datetime import datetime
 
 from tsproxy.common import Timeout
+from tsproxy.version import version
 
-
-__version__ = '4.2.10'
+__version__ = version
 
 
 conf_path = []
@@ -502,7 +502,7 @@ class Product(Material):
 
     PID = 0
 
-    def __init__(self, material=None, parent=None, batch_id=0, depth=0, needs=None, prod_type=2, city=None, **kwargs):
+    def __init__(self, material=None, parent=None, batch_id=None, depth=0, needs=None, prod_type=2, city=None, **kwargs):
         super().__init__(**kwargs)
         self._material = material
 
@@ -526,9 +526,9 @@ class Product(Material):
         self._parent = parent
         if parent is not None:
             self['p_ppid'] = parent.pid
-            self['batch_id'] = parent.batch_id if batch_id == 0 else batch_id
+            self['batch_id'] = parent.batch_id if batch_id is None else batch_id
         else:
-            self['batch_id'] = batch_id
+            self['batch_id'] = 0 if batch_id is None else batch_id
 
         if depth < 0:
             self['cn_name'] = "%d#ROOT" % abs(self.batch_id)
@@ -684,16 +684,16 @@ class Product(Material):
                     self['_speed_up_end_timing'] = _factory.speed_up_end_timing
                     if '_speed_up_timing' in self:
                         self['_speed_up_timing'] += _speed_up_timing
-                        self._city.cprint('\x1b[1;33;48m%s 又加速了 %s, 总共加速 %s\x1b[0m', self, fmt_time_delta(_speed_up_timing), fmt_time_delta(self['_speed_up_timing']))
+                        speed_up_msg = '\x1b[1;33;48m%s 又加速了 %s, 总共加速 %s' % (self, fmt_time_delta(_speed_up_timing), fmt_time_delta(self['_speed_up_timing']))
                     else:
                         self['_speed_up_timing'] = _speed_up_timing
-                        self._city.cprint('\x1b[1;33;48m%s 加速了 %s\x1b[0m', self, fmt_time_delta(_speed_up_timing))
+                        speed_up_msg = '\x1b[1;33;48m%s 加速了 %s' % (self, fmt_time_delta(_speed_up_timing))
                     eta = start_timing + (time_consuming - self['_speed_up_timing'])
                     self['_time_left_on_speed_up_end'] = max(0, eta - _factory.speed_up_end_timing)
                     if self.start_timing >= 0:
-                        speed_up_msg = '\x1b[1;33;48m%s 生产时间(%s-%s)' % (self, fmt_city_timing(start_timing), fmt_city_timing(eta))
+                        speed_up_msg += ', 生产时间(%s-%s)' % (fmt_city_timing(start_timing), fmt_city_timing(eta))
                     else:
-                        speed_up_msg = '\x1b[1;33;48m%s 预计生产时间(%s-%s)' % (self, fmt_city_timing(start_timing), fmt_city_timing(eta))
+                        speed_up_msg += ', 预计生产时间(%s-%s)' % (fmt_city_timing(start_timing), fmt_city_timing(eta))
                     if self['_time_left_on_speed_up_end'] > 0:
                         speed_up_msg += ', 加速结束时(%s)还剩生产时间 %s\x1b[0m' % (fmt_city_timing(_factory.speed_up_end_timing), fmt_time_delta(self['_time_left_on_speed_up_end']))
                     else:
@@ -766,10 +766,10 @@ class Product(Material):
     def _collect_products(self, done_products=None, do_normalize_on_done=False):
         _products = []
         self._city.warehouse.consume(batch_id=self.batch_id, just_peek=True, consumed=_products)
-        _products.sort(key=lambda _p: _p.batch_id)
+        _products.sort(key=lambda _p: -abs(_p.batch_id) if _p.depth == 0 else _p.batch_id)
         for i in range(len(_products)):
             p = _products[i]
-            if p.batch_id < 0:
+            if p.batch_id < 0 or p.depth == 0:
                 if done_products is not None:
                     done_products.append(p._id_str_)
             else:
@@ -876,7 +876,7 @@ class Product(Material):
         else:
             self._detach_chain()
         if self.depth == 0:
-            if self.is_for_sell:
+            if self.is_for_sell or self._city.get_batch(self.batch_id) is None:
                 self.batch_id = 0
             else:
                 self.batch_id = -self.batch_id
