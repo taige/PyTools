@@ -128,7 +128,7 @@ dns_executor = MyThreadPoolExecutor(max_workers=os.cpu_count(), pool_name='DnsWo
 
 
 async def update_apnic_latest(raise_on_fail=False, loop=None):
-    import pyclda
+    from pyclda.aio_downloader import AioDownloader
     global apnic_file
     if apnic_file is None:
         apnic_file = lookup_conf_file(APNIC_LATEST)
@@ -137,7 +137,7 @@ async def update_apnic_latest(raise_on_fail=False, loop=None):
     if not is_exist or (time.time() - os.stat(apnic_file).st_mtime) >= expired_time:
         # not found or expired
         tmp_filename = apnic_file + '.downloading'
-        done, new_file, _ = await pyclda.aio_download(common.apnic_latest_url, out_file=tmp_filename, loop=loop)
+        done, new_file, _ = await AioDownloader(common.apnic_latest_url, out_file=tmp_filename, loop=loop).download()
         if done:
             if is_exist:
                 # backup old file
