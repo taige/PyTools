@@ -1,8 +1,8 @@
-from distutils.core import setup
+from setuptools import setup
 
 from tsproxy.version import version
 
-install_requires = ['uvloop', 'requests', 'async_timeout', 'aiohttp>=2.0', 'pyyaml', 'psutil', 'shadowsocks>=3.0', 'dnspython3']
+install_requires = ['uvloop', 'requests', 'async_timeout', 'aiohttp>=2.3, <3.0', 'pyyaml', 'psutil', 'shadowsocks>=3.0', 'dnspython3']
 
 setup(
     name='PyTools',
