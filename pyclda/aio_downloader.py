@@ -224,7 +224,7 @@ class AioDownloader:
 
         futures = []
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit_per_host=self.limit_per_host, enable_cleanup_closed=True, force_close=True, loop=self.loop),
-                                         conn_timeout=self.conn_timeout, loop=self.loop) as session:
+                                         auto_decompress=False, conn_timeout=self.conn_timeout, loop=self.loop) as session:
 
             async def __start_download_task(_index=0):
                 if _index > 0:
